@@ -6,13 +6,16 @@ import {
   Navigate,
 } from "react-router-dom";
 import { onAuthStateChanged } from "firebase/auth";
-import { auth, db } from "./firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { auth } from "./firebase/firebaseConfig";
+import { getUserProfile } from "./firebase/dbService";
 
 import Login from "./Pages/Login";
 import Register from "./Pages/Register";
 import CompleteProfile from "./Pages/CompleteProfile";
 import Dashboard from "./Pages/Dashboard";
+import Reports from "./Pages/Reports";
+import PredictPages from "./Pages/PredictPages";
+import Profile from "./Pages/Profile";
 
 const IS_DEV =
   import.meta.env.MODE === "development" ||
@@ -34,19 +37,22 @@ function App() {
       if (currentUser) {
         try {
           const fetchDocWithTimeout = () => {
-            return new Promise((resolve, reject) => {
+            return new Promise(async (resolve, reject) => {
               const timer = setTimeout(() => reject(new Error("Firebase check timed out.")), 8000);
-              getDoc(doc(db, "users", currentUser.uid))
-                .then(resolve)
-                .catch(reject)
-                .finally(() => clearTimeout(timer));
+              try {
+                const profile = await getUserProfile(currentUser.uid);
+                resolve(profile);
+              } catch (e) {
+                reject(e);
+              } finally {
+                clearTimeout(timer);
+              }
             });
           };
 
-          const userDoc = await fetchDocWithTimeout();
-          if (userDoc.exists()) {
-            const data = userDoc.data();
-            const profileCompleted = !!data.profileCompleted;
+          const userProfile = await fetchDocWithTimeout();
+          if (userProfile) {
+            const profileCompleted = !!userProfile.profileCompleted;
             setUser({ ...currentUser, profileCompleted });
             setDevState({
               userDocExists: true,
@@ -144,47 +150,40 @@ function App() {
                 )
               }
             />
-          </Routes>
 
-          {IS_DEV && (
-            <div className="fixed bottom-4 left-4 z-40 max-w-xs rounded-xl bg-slate-900/80 border border-slate-700/80 px-4 py-3 text-xs text-slate-200 shadow-lg shadow-slate-900/70 backdrop-blur-md">
-              <div className="flex items-center justify-between mb-1">
-                <span className="font-semibold tracking-wide text-[10px] text-slate-400 uppercase">
-                  Dev Panel · Auth Debug
-                </span>
-                <span
-                  className={`w-2 h-2 rounded-full ${user ? "bg-emerald-400" : "bg-rose-400"
-                    }`}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <div className="flex justify-between gap-2">
-                  <span className="text-slate-400">UID</span>
-                  <span className="text-right truncate max-w-[10rem] font-mono text-[10px]">
-                    {user?.uid || "—"}
-                  </span>
-                </div>
-                <div className="flex justify-between gap-2">
-                  <span className="text-slate-400">Email</span>
-                  <span className="text-right truncate max-w-[10rem] font-mono text-[10px]">
-                    {user?.email || "—"}
-                  </span>
-                </div>
-                <div className="flex justify-between gap-2">
-                  <span className="text-slate-400">User doc</span>
-                  <span className="font-mono text-[10px]">
-                    {devState.userDocExists ? "EXISTS" : "MISSING"}
-                  </span>
-                </div>
-                <div className="flex justify-between gap-2">
-                  <span className="text-slate-400">Profile completed</span>
-                  <span className="font-mono text-[10px]">
-                    {devState.profileCompleted ? "TRUE" : "FALSE"}
-                  </span>
-                </div>
-              </div>
-            </div>
-          )}
+            <Route
+              path="/reports"
+              element={
+                user && user.profileCompleted ? (
+                  <Reports user={user} />
+                ) : (
+                  <Navigate to="/login" />
+                )
+              }
+            />
+
+            <Route
+              path="/predict/:type"
+              element={
+                user && user.profileCompleted ? (
+                  <PredictPages user={user} />
+                ) : (
+                  <Navigate to="/login" />
+                )
+              }
+            />
+
+            <Route
+              path="/profile"
+              element={
+                user && user.profileCompleted ? (
+                  <Profile user={user} />
+                ) : (
+                  <Navigate to="/login" />
+                )
+              }
+            />
+          </Routes>
         </div>
       </div>
     </Router>

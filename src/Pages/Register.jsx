@@ -13,8 +13,8 @@ import {
   Loader2,
 } from "lucide-react";
 import { registerUser, signInWithGoogle } from "../firebase/authService";
-import AuthLayout from "../components/AuthLayout";
-import Toast from "../components/Toast";
+import AuthLayout from "../Components/AuthLayout";
+import Toast from "../Components/Toast";
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -33,6 +33,7 @@ const Register = () => {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [serverError, setServerError] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
   const navigate = useNavigate();
 
   const validate = () => {
@@ -98,10 +99,10 @@ const Register = () => {
     try {
       const { password, confirmPassword, ...userData } = formData;
       await registerUser(formData.email, formData.password, userData);
-      navigate("/dashboard");
+      setSuccessMsg("Registration successful. Please login.");
+      setTimeout(() => navigate("/login"), 1500);
     } catch (error) {
-      setServerError(error.message || "Failed to register account");
-    } finally {
+      setServerError(error.message || "Failed to register account. Check network.");
       setLoading(false);
     }
   };
@@ -132,6 +133,11 @@ const Register = () => {
         message={serverError}
         type="error"
         onClose={() => setServerError("")}
+      />
+      <Toast
+        message={successMsg}
+        type="success"
+        onClose={() => setSuccessMsg("")}
       />
       <div className="glass-card w-full max-w-2xl mx-auto p-8 rounded-2xl relative overflow-hidden">
         {/* Decorative corner elements */}
@@ -165,9 +171,8 @@ const Register = () => {
                   name="fullName"
                   value={formData.fullName}
                   onChange={handleChange}
-                  className={`w-full bg-slate-800/50 border ${
-                    errors.fullName ? "border-red-500/50" : "border-slate-700 focus:border-neonCyan"
-                  } text-white rounded-lg pl-10 pr-4 py-2.5 text-sm outline-none transition-colors duration-200`}
+                  className={`w-full bg-slate-800/50 border ${errors.fullName ? "border-red-500/50" : "border-slate-700 focus:border-neonCyan"
+                    } text-white rounded-lg pl-10 pr-4 py-2.5 text-sm outline-none transition-colors duration-200`}
                   placeholder="Dr. Sarah Connor"
                 />
               </div>
@@ -190,9 +195,8 @@ const Register = () => {
                   name="email"
                   value={formData.email}
                   onChange={handleChange}
-                  className={`w-full bg-slate-800/50 border ${
-                    errors.email ? "border-red-500/50" : "border-slate-700 focus:border-neonCyan"
-                  } text-white rounded-lg pl-10 pr-4 py-2.5 text-sm outline-none transition-colors duration-200`}
+                  className={`w-full bg-slate-800/50 border ${errors.email ? "border-red-500/50" : "border-slate-700 focus:border-neonCyan"
+                    } text-white rounded-lg pl-10 pr-4 py-2.5 text-sm outline-none transition-colors duration-200`}
                   placeholder="sarah@hexacare.net"
                 />
               </div>
@@ -215,9 +219,8 @@ const Register = () => {
                   name="password"
                   value={formData.password}
                   onChange={handleChange}
-                  className={`w-full bg-slate-800/50 border ${
-                    errors.password ? "border-red-500/50" : "border-slate-700 focus:border-neonPurple"
-                  } text-white rounded-lg pl-10 pr-4 py-2.5 text-sm outline-none transition-colors duration-200`}
+                  className={`w-full bg-slate-800/50 border ${errors.password ? "border-red-500/50" : "border-slate-700 focus:border-neonPurple"
+                    } text-white rounded-lg pl-10 pr-4 py-2.5 text-sm outline-none transition-colors duration-200`}
                   placeholder="••••••••"
                 />
               </div>
@@ -240,11 +243,10 @@ const Register = () => {
                   name="confirmPassword"
                   value={formData.confirmPassword}
                   onChange={handleChange}
-                  className={`w-full bg-slate-800/50 border ${
-                    errors.confirmPassword
-                      ? "border-red-500/50"
-                      : "border-slate-700 focus:border-neonPurple"
-                  } text-white rounded-lg pl-10 pr-4 py-2.5 text-sm outline-none transition-colors duration-200`}
+                  className={`w-full bg-slate-800/50 border ${errors.confirmPassword
+                    ? "border-red-500/50"
+                    : "border-slate-700 focus:border-neonPurple"
+                    } text-white rounded-lg pl-10 pr-4 py-2.5 text-sm outline-none transition-colors duration-200`}
                   placeholder="••••••••"
                 />
               </div>
@@ -269,11 +271,10 @@ const Register = () => {
                   name="phoneNumber"
                   value={formData.phoneNumber}
                   onChange={handleChange}
-                  className={`w-full bg-slate-800/50 border ${
-                    errors.phoneNumber
-                      ? "border-red-500/50"
-                      : "border-slate-700 focus:border-neonCyan"
-                  } text-white rounded-lg pl-10 pr-4 py-2.5 text-sm outline-none transition-colors duration-200`}
+                  className={`w-full bg-slate-800/50 border ${errors.phoneNumber
+                    ? "border-red-500/50"
+                    : "border-slate-700 focus:border-neonCyan"
+                    } text-white rounded-lg pl-10 pr-4 py-2.5 text-sm outline-none transition-colors duration-200`}
                   placeholder="+1 (555) 000-0000"
                 />
               </div>
@@ -293,9 +294,8 @@ const Register = () => {
                 name="gender"
                 value={formData.gender}
                 onChange={handleChange}
-                className={`w-full bg-slate-800/50 border ${
-                  errors.gender ? "border-red-500/50" : "border-slate-700 focus:border-neonCyan"
-                } text-white rounded-lg px-4 py-2.5 text-sm outline-none transition-colors duration-200 appearance-none`}
+                className={`w-full bg-slate-800/50 border ${errors.gender ? "border-red-500/50" : "border-slate-700 focus:border-neonCyan"
+                  } text-white rounded-lg px-4 py-2.5 text-sm outline-none transition-colors duration-200 appearance-none`}
               >
                 <option value="" disabled className="text-slate-500">
                   Select Identity
@@ -329,11 +329,10 @@ const Register = () => {
                   name="dateOfBirth"
                   value={formData.dateOfBirth}
                   onChange={handleChange}
-                  className={`w-full bg-slate-800/50 border ${
-                    errors.dateOfBirth
-                      ? "border-red-500/50"
-                      : "border-slate-700 focus:border-neonCyan"
-                  } text-white rounded-lg pl-10 pr-4 py-2.5 text-sm outline-none transition-colors duration-200`}
+                  className={`w-full bg-slate-800/50 border ${errors.dateOfBirth
+                    ? "border-red-500/50"
+                    : "border-slate-700 focus:border-neonCyan"
+                    } text-white rounded-lg pl-10 pr-4 py-2.5 text-sm outline-none transition-colors duration-200`}
                   style={{ colorScheme: "dark" }}
                 />
               </div>
@@ -387,11 +386,10 @@ const Register = () => {
                   name="walletAddress"
                   value={formData.walletAddress}
                   onChange={handleChange}
-                  className={`w-full bg-slate-800/50 border ${
-                    errors.walletAddress
-                      ? "border-red-500/50"
-                      : "border-slate-700 focus:border-neonGreen"
-                  } text-white rounded-lg pl-10 pr-4 py-2.5 text-sm outline-none transition-colors duration-200`}
+                  className={`w-full bg-slate-800/50 border ${errors.walletAddress
+                    ? "border-red-500/50"
+                    : "border-slate-700 focus:border-neonGreen"
+                    } text-white rounded-lg pl-10 pr-4 py-2.5 text-sm outline-none transition-colors duration-200`}
                   placeholder="0x71C...976F"
                 />
               </div>

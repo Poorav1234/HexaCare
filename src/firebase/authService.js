@@ -7,62 +7,48 @@ import {
   onAuthStateChanged,
   EmailAuthProvider,
   linkWithCredential,
-  updateProfile,
+  fetchSignInMethodsForEmail,
   signOut,
 } from "firebase/auth";
-import {
-  doc,
-  setDoc,
-  getDoc,
-  updateDoc,
-  serverTimestamp,
-} from "firebase/firestore";
-import { auth, db, googleProvider, IS_DEV } from "./firebaseConfig";
+import { auth, googleProvider, IS_DEV } from "./firebaseConfig";
+import { getUserProfile, saveUserProfile } from "./dbService";
 
-/**
- * Helper: create or update the user profile document in Firestore.
- */
-async function createOrUpdateUserProfile(user, profileData, authProvider) {
-  const uid = user.uid;
-  const userRef = doc(db, "users", uid);
+// ---------------------------------------------------------------------------
+// Utility: timeout wrapper to prevent infinite loading if Firebase hangs
+// Included: 1 retry max as requested.
+// ---------------------------------------------------------------------------
+const withTimeout = async (
+  promiseFn,
+  ms = 10000,
+  errorMessage = "Request timed out. Please check your network connection or try again later.",
+  retries = 1
+) => {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      let timeoutId;
+      const timeoutPromise = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error("TIMEOUT_ERROR")), ms);
+      });
 
-  const now = serverTimestamp();
+      const result = await Promise.race([promiseFn(), timeoutPromise]).finally(() =>
+        clearTimeout(timeoutId)
+      );
 
-  const payload = {
-    fullName: profileData.fullName,
-    email: profileData.email,
-    phoneNumber: profileData.phoneNumber,
-    gender: profileData.gender,
-    dateOfBirth: profileData.dateOfBirth,
-    bloodGroup: profileData.bloodGroup || "",
-    walletAddress: profileData.walletAddress,
-    authProvider,
-    profileCompleted:
-      typeof profileData.profileCompleted === "boolean"
-        ? profileData.profileCompleted
-        : false,
-    createdAt: profileData.createdAt || now,
-    updatedAt: now,
-    lastLoginAt: profileData.lastLoginAt || now,
-  };
-
-  await setDoc(userRef, payload, { merge: true });
-
-  // Verification step
-  const snap = await getDoc(userRef);
-  if (!snap.exists()) {
-    throw new Error(
-      "User profile verification failed: document does not exist after write."
-    );
+      return result;
+    } catch (error) {
+      if (error.message === "TIMEOUT_ERROR") {
+        if (IS_DEV) console.error(`[Network] Timeout on attempt ${attempt + 1}/${retries + 1}`);
+        if (attempt === retries) {
+          throw new Error(errorMessage);
+        }
+        // Wait a bit before retrying
+        await new Promise(res => setTimeout(res, 1000));
+        continue;
+      }
+      throw error; // Not a timeout error, throw immediately
+    }
   }
-
-  if (IS_DEV) {
-    // eslint-disable-next-line no-console
-    console.log("[Firestore] User profile written:", uid, snap.data());
-  }
-
-  return snap.data();
-}
+};
 
 /**
  * Register user with email/password and full profile in one go.
@@ -83,16 +69,10 @@ export async function registerWithEmailAndProfile(formData) {
     const cred = await createUserWithEmailAndPassword(auth, email, password);
     const user = cred.user;
 
-    if (IS_DEV) {
-      // eslint-disable-next-line no-console
-      console.log("[Auth] User created with email/password. UID:", user.uid);
-    }
+    if (IS_DEV) console.log("[Auth] User created with email/password. UID:", user.uid);
 
-    // Set displayName for convenience
-    await updateProfile(user, { displayName: fullName });
-
-    const profile = await createOrUpdateUserProfile(
-      user,
+    const profile = await saveUserProfile(
+      user.uid,
       {
         fullName,
         email,
@@ -106,10 +86,18 @@ export async function registerWithEmailAndProfile(formData) {
       "password"
     );
 
+    // Sign out to prevent auto-login
+    await signOut(auth);
+
     return { user, profile };
   } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error("[Auth] registerWithEmailAndProfile error:", error);
+    if (IS_DEV) console.error("[Auth] registerWithEmailAndProfile error:", error);
+
+    // Check if email already exists
+    if (error.code === "auth/email-already-in-use") {
+      throw new Error("This email is already in use. Try logging in, or use another email.");
+    }
+
     throw new Error(error.message || "Registration failed");
   }
 }
@@ -123,60 +111,36 @@ export async function loginWithEmail(email, password) {
     const cred = await signInWithEmailAndPassword(auth, email, password);
     const user = cred.user;
 
-    if (IS_DEV) {
-      // eslint-disable-next-line no-console
-      console.log("[Auth] User logged in with email/password. UID:", user.uid);
+    if (IS_DEV) console.log("[Auth] User logged in with email/password. UID:", user.uid);
+
+    let profile = await getUserProfile(user.uid);
+
+    // If profile exists, quickly update timestamp
+    if (profile) {
+      profile = await saveUserProfile(user.uid, { ...profile }, "password");
+    } else {
+      // Create minimal profile if absolutely missing
+      profile = await saveUserProfile(user.uid, { email: user.email, profileCompleted: false }, "password");
     }
 
-    const userRef = doc(db, "users", user.uid);
+    const needsProfileCompletion = !profile.profileCompleted;
 
-    // Update lastLoginAt
-    await updateDoc(userRef, {
-      lastLoginAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    }).catch(async (err) => {
-      // If doc doesn't exist, create a minimal one
-      if (IS_DEV) {
-        // eslint-disable-next-line no-console
-        console.warn(
-          "[Firestore] updateDoc failed, attempting to create minimal profile:",
-          err
-        );
-      }
-      await setDoc(
-        userRef,
-        {
-          email: user.email || email,
-          fullName: user.displayName || "",
-          authProvider: "password",
-          profileCompleted: false,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-          lastLoginAt: serverTimestamp(),
-        },
-        { merge: true }
-      );
-    });
+    if (IS_DEV) console.log("[RTDB] User profile on login:", user.uid, profile);
 
-    const snap = await getDoc(userRef);
-    const data = snap.data() || {};
-    const needsProfileCompletion = !data.profileCompleted;
-
-    if (IS_DEV) {
-      // eslint-disable-next-line no-console
-      console.log("[Firestore] User profile on login:", user.uid, data);
-    }
-
-    return { user, profile: data, needsProfileCompletion };
+    return { user, profile, needsProfileCompletion };
   } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error("[Auth] loginWithEmail error:", error);
+    if (IS_DEV) console.error("[Auth] loginWithEmail error:", error);
+
+    if (error.code === "auth/invalid-credential" || error.code === "auth/wrong-password") {
+      throw new Error("Invalid password or email.");
+    }
+
     throw new Error(error.message || "Login failed");
   }
 }
 
 /**
- * Google Sign-In flow.
+ * Google Sign-In flow with credential linking logic.
  * Returns { user, profile, isNewOrIncomplete }
  */
 export async function loginWithGoogle() {
@@ -184,74 +148,59 @@ export async function loginWithGoogle() {
     const cred = await signInWithPopup(auth, googleProvider);
     const user = cred.user;
 
-    if (IS_DEV) {
-      // eslint-disable-next-line no-console
-      console.log("[Auth] Google sign-in success. UID:", user.uid);
-    }
+    if (IS_DEV) console.log("[Auth] Google sign-in success. UID:", user.uid);
 
-    const userRef = doc(db, "users", user.uid);
-    const snap = await getDoc(userRef);
-    const exists = snap.exists();
-    const data = exists ? snap.data() : null;
+    let profile = await getUserProfile(user.uid);
+    let isNewOrIncomplete = false;
 
-    if (!exists || !data.profileCompleted) {
+    if (!profile || !profile.profileCompleted) {
       // First time or incomplete profile
-      if (!exists) {
-        // Create a minimal stub so rules allow later updates
-        await setDoc(
-          userRef,
-          {
-            email: user.email || "",
-            fullName: user.displayName || "",
-            authProvider: "google",
-            profileCompleted: false,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          },
-          { merge: true }
-        );
+      if (!profile) {
+        // Create a minimal stub
+        profile = await saveUserProfile(user.uid, { email: user.email || "", fullName: user.displayName || "", profileCompleted: false }, "google");
       }
+      isNewOrIncomplete = true;
 
       return {
         user,
-        profile: data || null,
-        isNewOrIncomplete: true,
+        profile,
+        isNewOrIncomplete,
       };
     }
 
-    // Existing and completed: update lastLoginAt
-    await updateDoc(userRef, {
-      lastLoginAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
+    // Existing and completed: update timestamp
+    profile = await saveUserProfile(user.uid, { ...profile }, "google");
 
-    if (IS_DEV) {
-      // eslint-disable-next-line no-console
-      console.log("[Firestore] Existing Google user profile:", user.uid, data);
-    }
+    if (IS_DEV) console.log("[RTDB] Existing Google user profile:", user.uid, profile);
 
     return {
       user,
-      profile: data,
+      profile,
       isNewOrIncomplete: false,
     };
   } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error("[Auth] loginWithGoogle error:", error);
+    if (IS_DEV) console.error("[Auth] loginWithGoogle error object:", error);
+
+    // Advanced Linking Logic
+    if (error.code === 'auth/account-exists-with-different-credential') {
+      if (IS_DEV) console.log("[Auth] 'Account exists' caught. Attempting fetchSignInMethodsForEmail for", error.customData.email);
+
+      try {
+        const email = error.customData.email;
+        const methods = await fetchSignInMethodsForEmail(auth, email);
+
+        if (methods.includes("password")) {
+          throw new Error(`An account already exists with ${email}. Please log in using your Password first, then link Google from your profile.`);
+        }
+        throw new Error(`Account exists with different credentials: ${methods.join(", ")}`);
+      } catch (fetchErr) {
+        throw new Error(error.message || fetchErr.message || "Account exists with different credential, linking unavailable.");
+      }
+    }
+
     throw new Error(error.message || "Google sign-in failed");
   }
 }
-
-// ---------------------------------------------------------------------------
-// Utility: timeout wrapper to prevent infinite loading if Firebase hangs
-// ---------------------------------------------------------------------------
-const withTimeout = (promise, ms = 10000, errorMessage = "Request timed out. Please check your network connection or try again later.") => {
-  let timeoutId;
-  const timeoutPromise = new Promise((_, reject) => {
-    timeoutId = setTimeout(() => reject(new Error(errorMessage)), ms);
-  });
-  return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timeoutId));
-};
 
 // ---------------------------------------------------------------------------
 // Convenience wrappers used by the existing UI components
@@ -263,7 +212,7 @@ const withTimeout = (promise, ms = 10000, errorMessage = "Request timed out. Ple
  * registerUser(email, password, userData)
  */
 export async function registerUser(email, password, userData) {
-  const { user } = await withTimeout(registerWithEmailAndProfile({
+  const { user } = await withTimeout(() => registerWithEmailAndProfile({
     ...userData,
     email,
     password,
@@ -276,7 +225,10 @@ export async function registerUser(email, password, userData) {
  * loginUser(email, password)
  */
 export async function loginUser(email, password) {
-  const { user } = await withTimeout(loginWithEmail(email, password));
+  const { user, needsProfileCompletion } = await withTimeout(() => loginWithEmail(email, password));
+  if (needsProfileCompletion) {
+    throw new Error("PROFILE_INCOMPLETE"); // Handled manually by our UI if needed
+  }
   return user;
 }
 
@@ -285,7 +237,7 @@ export async function loginUser(email, password) {
  * signInWithGoogle()
  */
 export async function signInWithGoogle() {
-  return withTimeout(loginWithGoogle());
+  return withTimeout(() => loginWithGoogle());
 }
 
 /**
@@ -293,24 +245,7 @@ export async function signInWithGoogle() {
  * resetPassword(email)
  */
 export async function resetPassword(email) {
-  return withTimeout(sendPasswordReset(email));
-}
-
-/**
- * Wrapper used by CompleteProfile:
- * completeGoogleProfile(email, password, userData)
- */
-export async function completeGoogleProfile(email, password, userData) {
-  const user = auth.currentUser;
-  if (!user) {
-    throw new Error("No authenticated user.");
-  }
-  const { profile } = await withTimeout(completeUserProfile({
-    user,
-    profileData: userData,
-    passwordForLinking: password,
-  }));
-  return { user, profile };
+  return withTimeout(() => sendPasswordReset(email));
 }
 
 /**
@@ -324,6 +259,19 @@ export async function logoutUser() {
  * Complete profile (used for Google and incomplete manual users).
  * Optionally link email/password credentials for Google accounts.
  */
+export async function completeGoogleProfile(email, password, userData) {
+  const user = auth.currentUser;
+  if (!user) {
+    throw new Error("No authenticated user.");
+  }
+  const { profile } = await withTimeout(() => completeUserProfile({
+    user,
+    profileData: userData,
+    passwordForLinking: password,
+  }));
+  return { user, profile };
+}
+
 export async function completeUserProfile({
   user,
   profileData,
@@ -334,8 +282,8 @@ export async function completeUserProfile({
   }
 
   try {
-    const finalProfile = await createOrUpdateUserProfile(
-      user,
+    const finalProfile = await saveUserProfile(
+      user.uid,
       {
         ...profileData,
         profileCompleted: true,
@@ -345,42 +293,32 @@ export async function completeUserProfile({
 
     // Link email/password if requested (for Google users)
     if (passwordForLinking && user.email) {
-      const cred = EmailAuthProvider.credential(user.email, passwordForLinking);
-      await linkWithCredential(user, cred);
-      if (IS_DEV) {
-        // eslint-disable-next-line no-console
-        console.log("[Auth] Email/password linked to Google account:", user.uid);
+      if (IS_DEV) console.log("[Auth] Attempting to link Password credential for:", user.email);
+      // First ensure they don't already have password method mapped to prevent duplicates
+      const methods = await fetchSignInMethodsForEmail(auth, user.email);
+      if (!methods.includes('password')) {
+        const cred = EmailAuthProvider.credential(user.email, passwordForLinking);
+        await linkWithCredential(user, cred);
+        if (IS_DEV) console.log("[Auth] Email/password successfully linked to Google account:", user.uid);
+      } else {
+        if (IS_DEV) console.log("[Auth] Password already linked, skipping linkWithCredential.");
       }
     }
 
+    // Sign out to prevent auto-login as per requirements
+    await signOut(auth);
+
     return { user, profile: finalProfile };
   } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error("[Auth] completeUserProfile error:", error);
+    if (IS_DEV) console.error("[Auth] completeUserProfile error:", error);
+
+    // Explicit Credential link error handling
+    if (error.code === 'auth/credential-already-in-use') {
+      throw new Error("This password credential is already linked to another account.");
+    }
+
     throw new Error(error.message || "Failed to complete profile");
   }
-}
-
-/**
- * Password reset.
- */
-export async function sendPasswordReset(email) {
-  try {
-    await sendPasswordResetEmail(auth, email);
-  } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error("[Auth] sendPasswordReset error:", error);
-    throw new Error(error.message || "Failed to send password reset email");
-  }
-}
-
-/**
- * Get a user profile by uid.
- */
-export async function getUserProfile(uid) {
-  const ref = doc(db, "users", uid);
-  const snap = await getDoc(ref);
-  return snap.exists() ? snap.data() : null;
 }
 
 /**

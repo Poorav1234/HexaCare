@@ -10,23 +10,24 @@ import {
   Loader2,
 } from "lucide-react";
 import { completeGoogleProfile } from "../firebase/authService";
-import AuthLayout from "../components/AuthLayout";
-import Toast from "../components/Toast";
+import AuthLayout from "../Components/AuthLayout";
+import Toast from "../Components/Toast";
 
 const CompleteProfile = ({ user }) => {
-    const [formData, setFormData] = useState({
-        password: '',
-        confirmPassword: '',
-        phoneNumber: '',
-        gender: '',
-        dateOfBirth: '',
-        bloodGroup: '',
-        walletAddress: ''
-    });
+  const [formData, setFormData] = useState({
+    password: '',
+    confirmPassword: '',
+    phoneNumber: '',
+    gender: '',
+    dateOfBirth: '',
+    bloodGroup: '',
+    walletAddress: ''
+  });
 
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [serverError, setServerError] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -93,8 +94,8 @@ const CompleteProfile = ({ user }) => {
       };
 
       await completeGoogleProfile(user.email, formData.password, userData);
-
-      navigate("/dashboard");
+      setSuccessMsg("Google signup completed, please login.");
+      setTimeout(() => navigate("/login"), 1500);
     } catch (error) {
       if (error.code === "auth/requires-recent-login") {
         setServerError(
@@ -105,7 +106,6 @@ const CompleteProfile = ({ user }) => {
           error.message || "Failed to complete profile. Try again."
         );
       }
-    } finally {
       setLoading(false);
     }
   };
@@ -121,6 +121,11 @@ const CompleteProfile = ({ user }) => {
         message={serverError}
         type="error"
         onClose={() => setServerError("")}
+      />
+      <Toast
+        message={successMsg}
+        type="success"
+        onClose={() => setSuccessMsg("")}
       />
       <div className="glass-card w-full max-w-2xl mx-auto p-8 rounded-2xl relative overflow-hidden">
         {/* Decorative elements */}
@@ -166,11 +171,10 @@ const CompleteProfile = ({ user }) => {
                   name="password"
                   value={formData.password}
                   onChange={handleChange}
-                  className={`w-full bg-slate-900 border ${
-                    errors.password
-                      ? "border-red-500/50"
-                      : "border-slate-700 focus:border-neonGreen"
-                  } text-white rounded-lg pl-10 pr-4 py-2.5 text-sm outline-none transition-colors duration-200`}
+                  className={`w-full bg-slate-900 border ${errors.password
+                    ? "border-red-500/50"
+                    : "border-slate-700 focus:border-neonGreen"
+                    } text-white rounded-lg pl-10 pr-4 py-2.5 text-sm outline-none transition-colors duration-200`}
                   placeholder="Set Password *"
                 />
               </div>
@@ -190,11 +194,10 @@ const CompleteProfile = ({ user }) => {
                   name="confirmPassword"
                   value={formData.confirmPassword}
                   onChange={handleChange}
-                  className={`w-full bg-slate-900 border ${
-                    errors.confirmPassword
-                      ? "border-red-500/50"
-                      : "border-slate-700 focus:border-neonGreen"
-                  } text-white rounded-lg pl-10 pr-4 py-2.5 text-sm outline-none transition-colors duration-200`}
+                  className={`w-full bg-slate-900 border ${errors.confirmPassword
+                    ? "border-red-500/50"
+                    : "border-slate-700 focus:border-neonGreen"
+                    } text-white rounded-lg pl-10 pr-4 py-2.5 text-sm outline-none transition-colors duration-200`}
                   placeholder="Confirm Password *"
                 />
               </div>
@@ -223,11 +226,10 @@ const CompleteProfile = ({ user }) => {
                   name="phoneNumber"
                   value={formData.phoneNumber}
                   onChange={handleChange}
-                  className={`w-full bg-slate-800/50 border ${
-                    errors.phoneNumber
-                      ? "border-red-500/50"
-                      : "border-slate-700 focus:border-neonCyan"
-                  } text-white rounded-lg pl-10 pr-4 py-2.5 text-sm outline-none transition-colors duration-200`}
+                  className={`w-full bg-slate-800/50 border ${errors.phoneNumber
+                    ? "border-red-500/50"
+                    : "border-slate-700 focus:border-neonCyan"
+                    } text-white rounded-lg pl-10 pr-4 py-2.5 text-sm outline-none transition-colors duration-200`}
                   placeholder="+1 (555) 000-0000"
                 />
               </div>
@@ -247,9 +249,8 @@ const CompleteProfile = ({ user }) => {
                 name="gender"
                 value={formData.gender}
                 onChange={handleChange}
-                className={`w-full bg-slate-800/50 border ${
-                  errors.gender ? "border-red-500/50" : "border-slate-700 focus:border-neonCyan"
-                } text-white rounded-lg px-4 py-2.5 text-sm outline-none transition-colors duration-200 appearance-none`}
+                className={`w-full bg-slate-800/50 border ${errors.gender ? "border-red-500/50" : "border-slate-700 focus:border-neonCyan"
+                  } text-white rounded-lg px-4 py-2.5 text-sm outline-none transition-colors duration-200 appearance-none`}
               >
                 <option value="" disabled className="text-slate-500">
                   Select Identity
@@ -283,11 +284,10 @@ const CompleteProfile = ({ user }) => {
                   name="dateOfBirth"
                   value={formData.dateOfBirth}
                   onChange={handleChange}
-                  className={`w-full bg-slate-800/50 border ${
-                    errors.dateOfBirth
-                      ? "border-red-500/50"
-                      : "border-slate-700 focus:border-neonCyan"
-                  } text-white rounded-lg pl-10 pr-4 py-2.5 text-sm outline-none transition-colors duration-200`}
+                  className={`w-full bg-slate-800/50 border ${errors.dateOfBirth
+                    ? "border-red-500/50"
+                    : "border-slate-700 focus:border-neonCyan"
+                    } text-white rounded-lg pl-10 pr-4 py-2.5 text-sm outline-none transition-colors duration-200`}
                   style={{ colorScheme: "dark" }}
                 />
               </div>
@@ -341,11 +341,10 @@ const CompleteProfile = ({ user }) => {
                   name="walletAddress"
                   value={formData.walletAddress}
                   onChange={handleChange}
-                  className={`w-full bg-slate-800/50 border ${
-                    errors.walletAddress
-                      ? "border-red-500/50"
-                      : "border-slate-700 focus:border-neonGreen"
-                  } text-white rounded-lg pl-10 pr-4 py-2.5 text-sm outline-none transition-colors duration-200`}
+                  className={`w-full bg-slate-800/50 border ${errors.walletAddress
+                    ? "border-red-500/50"
+                    : "border-slate-700 focus:border-neonGreen"
+                    } text-white rounded-lg pl-10 pr-4 py-2.5 text-sm outline-none transition-colors duration-200`}
                   placeholder="0x71C...976F"
                 />
               </div>

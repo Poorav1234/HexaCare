@@ -2,7 +2,7 @@
 import { initializeApp, getApps } from "firebase/app";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
-
+import { getDatabase } from "firebase/database";
 const envConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -21,6 +21,7 @@ const fallbackConfig = {
   storageBucket: "hexacare-mbs.firebasestorage.app",
   messagingSenderId: "875066023824",
   appId: "1:875066023824:web:4161a7bd56630398b6dd15",
+  databaseURL: "https://hexacare-mbs-default-rtdb.firebaseio.com",
 };
 
 const hasEnv =
@@ -36,7 +37,7 @@ const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 
 const auth = getAuth(app);
 const db = getFirestore(app);
-
+const rtdb = getDatabase(app);
 const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({
   prompt: "select_account",
@@ -49,4 +50,4 @@ const IS_DEV =
     process.env &&
     process.env.NODE_ENV === "development");
 
-export { app, auth, db, googleProvider, IS_DEV };
+export { app, auth, db, rtdb, googleProvider, IS_DEV };
