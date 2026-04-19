@@ -12,6 +12,10 @@ import {
 import { completeGoogleProfile } from "../firebase/authService";
 import AuthLayout from "../Components/AuthLayout";
 import Toast from "../Components/Toast";
+import PhoneInput, { isValidPhoneNumber } from 'react-phone-number-input';
+import 'react-phone-number-input/style.css';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
 
 const CompleteProfile = ({ user }) => {
   const [formData, setFormData] = useState({
@@ -49,8 +53,8 @@ const CompleteProfile = ({ user }) => {
     }
 
     if (!formData.phoneNumber) newErrors.phoneNumber = "Phone number is required";
-    else if (!/^\d{8,15}$/.test(formData.phoneNumber))
-      newErrors.phoneNumber = "Phone number must be 8–15 digits";
+    else if (!isValidPhoneNumber(formData.phoneNumber))
+      newErrors.phoneNumber = "Invalid phone number";
 
     if (!formData.gender) newErrors.gender = "Gender is required";
     if (!formData.dateOfBirth) newErrors.dateOfBirth = "Date of birth is required";
@@ -127,10 +131,12 @@ const CompleteProfile = ({ user }) => {
         type="success"
         onClose={() => setSuccessMsg("")}
       />
-      <div className="glass-card w-full max-w-2xl mx-auto p-8 rounded-2xl relative overflow-hidden">
+      <div className="glass-card w-full max-w-4xl mx-auto p-8 rounded-2xl relative">
         {/* Decorative elements */}
-        <div className="absolute top-0 right-0 w-32 h-32 bg-neonGreen/10 blur-3xl rounded-full pointer-events-none"></div>
-        <div className="absolute bottom-0 left-0 w-40 h-40 bg-neonCyan/10 blur-3xl rounded-full pointer-events-none"></div>
+        <div className="absolute inset-0 overflow-hidden rounded-2xl pointer-events-none">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-neonGreen/10 blur-3xl rounded-full"></div>
+            <div className="absolute bottom-0 left-0 w-40 h-40 bg-neonCyan/10 blur-3xl rounded-full"></div>
+        </div>
 
         <div className="relative z-10 flex flex-col items-center mb-6">
           <div className="relative mb-2">
@@ -218,19 +224,15 @@ const CompleteProfile = ({ user }) => {
                 Phone Number *
               </label>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Phone className="h-4 w-4 text-slate-500" />
-                </div>
-                <input
-                  type="text"
-                  name="phoneNumber"
+                <PhoneInput
+                  international
+                  defaultCountry="US"
                   value={formData.phoneNumber}
-                  onChange={handleChange}
+                  onChange={(v) => setFormData({ ...formData, phoneNumber: v || "" })}
                   className={`w-full bg-slate-800/50 border ${errors.phoneNumber
                     ? "border-red-500/50"
-                    : "border-slate-700 focus:border-neonCyan"
-                    } text-white rounded-lg pl-10 pr-4 py-2.5 text-sm outline-none transition-colors duration-200`}
-                  placeholder="+1 (555) 000-0000"
+                    : "border-slate-700 focus-within:border-neonCyan"
+                    } text-white rounded-lg px-4 py-2.5 text-sm outline-none transition-colors duration-200`}
                 />
               </div>
               {errors.phoneNumber && (
@@ -275,20 +277,27 @@ const CompleteProfile = ({ user }) => {
               <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">
                 Date of Birth *
               </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <div className="relative z-20">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none z-10">
                   <Calendar className="h-4 w-4 text-slate-500" />
                 </div>
-                <input
-                  type="date"
-                  name="dateOfBirth"
-                  value={formData.dateOfBirth}
-                  onChange={handleChange}
+                <DatePicker
+                  selected={formData.dateOfBirth ? new Date(formData.dateOfBirth) : null}
+                  onChange={(date) => {
+                    const localDate = date ? new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().split('T')[0] : "";
+                    setFormData({ ...formData, dateOfBirth: localDate });
+                    if (errors.dateOfBirth) setErrors({ ...errors, dateOfBirth: "" });
+                  }}
                   className={`w-full bg-slate-800/50 border ${errors.dateOfBirth
                     ? "border-red-500/50"
                     : "border-slate-700 focus:border-neonCyan"
                     } text-white rounded-lg pl-10 pr-4 py-2.5 text-sm outline-none transition-colors duration-200`}
-                  style={{ colorScheme: "dark" }}
+                  dateFormat="yyyy-MM-dd"
+                  showYearDropdown
+                  scrollableYearDropdown
+                  yearDropdownItemNumber={100}
+                  maxDate={new Date()}
+                  placeholderText="Select Date"
                 />
               </div>
               {errors.dateOfBirth && (
