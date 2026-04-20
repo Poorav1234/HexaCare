@@ -2,6 +2,10 @@ import React, { useState, useEffect } from "react";
 import { User, Mail, Phone, Calendar, Droplet, Wallet, ShieldCheck, Cpu, Settings, Edit3, Save, X, Loader2 } from "lucide-react";
 import NavBar from "../Components/NavBar";
 import { getUserProfile, updateUserProfileFields } from "../firebase/dbService";
+import PhoneInput from 'react-phone-number-input';
+import 'react-phone-number-input/style.css';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
 
 const Profile = ({ user }) => {
     const [profileData, setProfileData] = useState({});
@@ -123,8 +127,10 @@ const Profile = ({ user }) => {
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {/* Identity Core */}
-                    <div className="md:col-span-2 glass-card rounded-2xl p-8 border border-slate-700/50 relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-32 h-32 bg-neonCyan/5 blur-3xl rounded-full pointer-events-none"></div>
+                    <div className="md:col-span-2 glass-card rounded-2xl p-8 border border-slate-700/50 relative">
+                        <div className="absolute inset-0 overflow-hidden rounded-2xl pointer-events-none">
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-neonCyan/5 blur-3xl rounded-full"></div>
+                        </div>
 
                         <h3 className="text-lg font-bold text-white mb-6 uppercase tracking-widest flex items-center gap-3 relative z-10">
                             <Cpu className="w-5 h-5 text-neonCyan" /> Core Metrics
@@ -141,11 +147,12 @@ const Profile = ({ user }) => {
                             <div className="space-y-1">
                                 <span className="text-xs text-slate-500 font-bold uppercase tracking-widest">Communication (Phone)</span>
                                 {isEditing ? (
-                                    <input
-                                        name="phoneNumber"
-                                        value={editForm.phoneNumber || ""}
-                                        onChange={handleEditChange}
-                                        className="w-full bg-slate-900 border border-slate-700 text-white rounded px-3 py-1.5 text-sm focus:border-neonCyan outline-none"
+                                    <PhoneInput
+                                        international
+                                        defaultCountry="US"
+                                        value={editForm.phoneNumber}
+                                        onChange={(v) => setEditForm({ ...editForm, phoneNumber: v || "" })}
+                                        className="w-full bg-slate-900 border border-slate-700 text-white rounded px-3 py-1.5 min-h-[36px] text-sm focus-within:border-neonCyan outline-none"
                                         placeholder="Enter phone"
                                     />
                                 ) : (
@@ -158,12 +165,18 @@ const Profile = ({ user }) => {
                             <div className="space-y-1">
                                 <span className="text-xs text-slate-500 font-bold uppercase tracking-widest">Date of Synthesis (DOB)</span>
                                 {isEditing ? (
-                                    <input
-                                        type="date"
-                                        name="dateOfBirth"
-                                        value={editForm.dateOfBirth || ""}
-                                        onChange={handleEditChange}
-                                        className="w-full bg-slate-900 border border-slate-700 text-white rounded px-3 py-1.5 text-sm focus:border-neonCyan outline-none"
+                                    <DatePicker
+                                        selected={editForm.dateOfBirth ? new Date(editForm.dateOfBirth) : null}
+                                        onChange={(date) => {
+                                            const localDate = date ? new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().split('T')[0] : "";
+                                            setEditForm({ ...editForm, dateOfBirth: localDate });
+                                        }}
+                                        className="w-full bg-slate-900 border border-slate-700 text-white rounded px-3 py-1.5 min-h-[36px] text-sm focus:border-neonCyan outline-none"
+                                        dateFormat="yyyy-MM-dd"
+                                        showYearDropdown
+                                        scrollableYearDropdown
+                                        yearDropdownItemNumber={100}
+                                        maxDate={new Date()}
                                     />
                                 ) : (
                                     <div className="flex items-center gap-3 text-slate-200">

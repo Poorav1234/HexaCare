@@ -12,7 +12,7 @@ export function AuthLayout({ children, title, subtitle }) {
   const isRegister = location.pathname === "/register";
 
   return (
-    <div className="min-h-screen w-full bg-slate-950 text-slate-50 overflow-hidden relative">
+    <div className="h-screen w-full bg-slate-950 text-slate-50 overflow-hidden relative">
       {/* Animated gradient background */}
       <div className="absolute inset-0">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_#22c1c3_0,_transparent_55%),_radial-gradient(circle_at_bottom,_#8a2be2_0,_transparent_55%)] opacity-70 animate-[pulse_12s_ease-in-out_infinite]" />
@@ -41,7 +41,7 @@ export function AuthLayout({ children, title, subtitle }) {
       </div>
 
       {/* Content */}
-      <div className="relative z-10 flex min-h-screen items-center justify-center px-4 py-8 sm:px-6 lg:px-8">
+      <div className="relative z-10 flex h-screen items-center justify-center px-4 py-8 sm:px-6 lg:px-8">
         <div className="max-w-5xl w-full grid lg:grid-cols-[1.1fr,1fr] gap-10 items-center">
           {/* Brand / Hero */}
           <div className="hidden lg:flex flex-col gap-6 text-slate-100">

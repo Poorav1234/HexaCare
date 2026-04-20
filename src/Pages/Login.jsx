@@ -104,7 +104,7 @@ const Login = () => {
           setResetMessage("");
         }}
       />
-      <div className="glass-card w-full max-w-md mx-auto p-8 rounded-2xl relative overflow-hidden">
+      <div className="glass-card w-full max-w-2xl mx-auto p-8 rounded-2xl relative overflow-hidden">
         {/* Decorative corner elements */}
         <div className="absolute top-0 right-0 w-24 h-24 bg-neonCyan/20 blur-3xl rounded-full"></div>
         <div className="absolute bottom-0 left-0 w-32 h-32 bg-neonPurple/20 blur-3xl rounded-full"></div>
