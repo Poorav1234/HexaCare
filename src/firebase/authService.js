@@ -237,7 +237,9 @@ export async function loginUser(email, password) {
  * signInWithGoogle()
  */
 export async function signInWithGoogle() {
-  return withTimeout(() => loginWithGoogle());
+  // Bypassing withTimeout for Google Sign-In because the user might take
+  // much longer than 10 seconds to interact with the popup window (2FA, etc).
+  return loginWithGoogle();
 }
 
 /**

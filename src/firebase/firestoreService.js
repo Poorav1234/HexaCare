@@ -11,9 +11,9 @@ const generateTxHash = () => {
     return hash;
 };
 
-export const saveReportToBlockchain = async (user, reportData) => {
+export const saveReportToBlockchain = async (user, reportData, realTxHash = null) => {
     try {
-        const txHash = generateTxHash();
+        const txHash = realTxHash || generateTxHash();
         const payload = {
             ...reportData,
             uid: user.uid,
@@ -24,7 +24,10 @@ export const saveReportToBlockchain = async (user, reportData) => {
         };
 
         try {
-            const docRef = await addDoc(collection(db, "reports"), payload);
+            const docRef = await Promise.race([
+                addDoc(collection(db, "reports"), payload),
+                new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 5000))
+            ]);
             return { success: true, txHash, id: docRef.id };
         } catch (error) {
             console.warn("[Firebase] Firestore write denied. Emulating locally.");
@@ -42,19 +45,33 @@ export const saveReportToBlockchain = async (user, reportData) => {
 };
 
 export const getUserReports = async (uid) => {
+    let firebaseReports = [];
     try {
         const q = query(
             collection(db, "reports"),
             where("uid", "==", uid),
             orderBy("createdAt", "desc")
         );
-        const querySnapshot = await getDocs(q);
-        return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const querySnapshot = await Promise.race([
+            getDocs(q),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 5000))
+        ]);
+        firebaseReports = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     } catch (error) {
-        console.warn("[Firebase] Firestore read denied. Loading local reports.");
-        const local = JSON.parse(localStorage.getItem('reports') || "[]");
-        return local.filter(r => r.uid === uid).sort((a,b) => b.createdAt - a.createdAt);
+        console.warn("[Firebase] Firestore read denied or timed out. Relying on local cache.");
     }
+    
+    // Always merge with local cache to prevent data erasure for offline entries
+    const local = JSON.parse(localStorage.getItem('reports') || "[]").filter(r => r.uid === uid);
+    const allReportsMap = new Map();
+    
+    [...local, ...firebaseReports].forEach(r => allReportsMap.set(r.id, r));
+    
+    return Array.from(allReportsMap.values()).sort((a, b) => {
+        const timeA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : a.createdAt;
+        const timeB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : b.createdAt;
+        return timeB - timeA;
+    });
 };
 
 export const savePrediction = async (user, type, inputs, riskLevel, score) => {
@@ -67,7 +84,10 @@ export const savePrediction = async (user, type, inputs, riskLevel, score) => {
             score: score,
             createdAt: serverTimestamp()
         };
-        const docRef = await addDoc(collection(db, "predictions"), payload);
+        const docRef = await Promise.race([
+            addDoc(collection(db, "predictions"), payload),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 5000))
+        ]);
         return { success: true, id: docRef.id };
     } catch (error) {
          console.warn("[Firebase] Firestore write denied. Emulating locally.");
@@ -81,17 +101,30 @@ export const savePrediction = async (user, type, inputs, riskLevel, score) => {
 };
 
 export const getUserPredictions = async (uid) => {
+    let firebasePredictions = [];
     try {
         const q = query(
             collection(db, "predictions"),
             where("uid", "==", uid),
             orderBy("createdAt", "desc")
         );
-        const querySnapshot = await getDocs(q);
-        return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const querySnapshot = await Promise.race([
+            getDocs(q),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 5000))
+        ]);
+        firebasePredictions = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     } catch (error) {
-        console.warn("[Firebase] Firestore read denied. Loading local predictions.");
-        const local = JSON.parse(localStorage.getItem('predictions') || "[]");
-        return local.filter(r => r.uid === uid).sort((a,b) => b.createdAt - a.createdAt);
+        console.warn("[Firebase] Firestore read denied or timed out. Relying on local predictions.");
     }
+
+    const local = JSON.parse(localStorage.getItem('predictions') || "[]").filter(r => r.uid === uid);
+    const allPredictionsMap = new Map();
+    
+    [...local, ...firebasePredictions].forEach(r => allPredictionsMap.set(r.id, r));
+    
+    return Array.from(allPredictionsMap.values()).sort((a, b) => {
+        const timeA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : a.createdAt;
+        const timeB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : b.createdAt;
+        return timeB - timeA;
+    });
 };

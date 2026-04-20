@@ -93,8 +93,8 @@ const Login = () => {
 
   return (
     <AuthLayout
-      title="Access your HexaCare node"
-      subtitle="Log in to your encrypted, chain-anchored health identity."
+      title="Sign In to HexaCare"
+      subtitle="Log in to your personalized health dashboard."
     >
       <Toast
         message={serverError || resetMessage}
@@ -111,14 +111,13 @@ const Login = () => {
 
         <div className="relative z-10 flex flex-col items-center mb-8">
           <div className="relative mb-2">
-            <Hexagon className="w-12 h-12 text-neonCyan absolute animate-pulse opacity-50" />
-            <HeartPulse className="w-12 h-12 text-neonPurple relative z-10 drop-shadow-[0_0_8px_rgba(176,0,255,0.8)]" />
+            <HeartPulse className="w-12 h-12 text-neonPurple relative z-10 drop-shadow-md" />
           </div>
           <h1 className="text-3xl font-bold tracking-wider text-white mt-4">
             HEXA<span className="text-neonCyan">CARE</span>
           </h1>
           <p className="text-slate-400 text-sm mt-1">
-            Medical AI + Blockchain Network
+            Personal Health Assistant
           </p>
         </div>
 
@@ -176,11 +175,11 @@ const Login = () => {
           <button
             type="submit"
             disabled={loading || googleLoading}
-            className="w-full relative group overflow-hidden rounded-lg bg-slate-800 border border-slate-700 py-3 px-4 text-sm font-medium text-white shadow-lg transition-all hover:border-neonCyan hover:shadow-[0_0_15px_rgba(0,243,255,0.3)] disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full relative group overflow-hidden rounded-lg bg-slate-800 border border-slate-700 py-3 px-4 text-sm font-medium text-white shadow-lg transition-all hover:border-neonCyan hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <div className="absolute inset-0 w-0 bg-gradient-to-r from-neonCyan/20 to-neonPurple/20 transition-all duration-[250ms] ease-out group-hover:w-full"></div>
-            <span className="relative flex items-center justify-center">
-              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "ACCESS NODE"}
+            <span className="relative flex items-center justify-center font-bold tracking-wider">
+              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "SIGN IN"}
             </span>
           </button>
         </form>
@@ -212,9 +211,9 @@ const Login = () => {
         </button>
 
         <p className="mt-8 text-center text-xs text-slate-500">
-          Unregistered node?{" "}
+          New to HexaCare?{" "}
           <Link to="/register" className="text-neonCyan hover:text-white transition-colors">
-            Initialize Account
+            Create an Account
           </Link>
         </p>
       </div>

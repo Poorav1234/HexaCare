@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { FileText, Loader2, Link as LinkIcon, Download, AlertCircle, Copy, Check } from "lucide-react";
+import { ethers } from "ethers";
 import NavBar from "../Components/NavBar";
 import { saveReportToBlockchain, getUserReports } from "../firebase/firestoreService";
 import { doc, getDoc } from "firebase/firestore";
@@ -7,7 +8,8 @@ import { db } from "../firebase";
 
 const Reports = ({ user }) => {
     const [profileData, setProfileData] = useState(null);
-    const [formData, setFormData] = useState({ reportTitle: "", reportType: "General", notes: "", fileUrl: "" });
+    const [formData, setFormData] = useState({ reportTitle: "", reportType: "General", notes: "" });
+    const [file, setFile] = useState(null);
     const [reports, setReports] = useState([]);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
@@ -46,29 +48,72 @@ const Reports = ({ user }) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
     };
 
+    const handleFileChange = (e) => {
+        if (e.target.files[0]) {
+            setFile(e.target.files[0]);
+        }
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setSubmitting(true);
 
-        setTimeout(async () => {
-            try {
-                // Ensure profile data is included in the user object passed to service
-                const enhancedUser = { ...user, profile: profileData };
-                await saveReportToBlockchain(enhancedUser, formData);
-                setFormData({ reportTitle: "", reportType: "General", notes: "", fileUrl: "" });
-                await fetchReports();
-            } catch (error) {
-                console.error(error);
-            } finally {
-                setSubmitting(false);
+        try {
+            let finalData = { ...formData, fileUrl: "" };
+            let txHash = null;
+
+            if (file) {
+                const uploadData = new FormData();
+                uploadData.append("file", file);
+
+                const res = await fetch("http://localhost:5000/upload", {
+                    method: "POST",
+                    body: uploadData
+                });
+
+                if (!res.ok) throw new Error("Upload failed");
+                const resData = await res.json();
+
+                finalData.fileUrl = `ipfs://${resData.cid}`;
+                
+                if (!window.ethereum) throw new Error("MetaMask not found");
+                const provider = new ethers.BrowserProvider(window.ethereum);
+                const signer = await provider.getSigner();
+                const contract = new ethers.Contract("0xe8e112009bf378220FAeDBf8BDDe368f827d4cCA", ["function addRecord(string memory _cid) public"], signer);
+                
+                const tx = await contract.addRecord(resData.cid);
+                await tx.wait(); // wait for blockchain confirmation
+                
+                txHash = tx.hash;
             }
-        }, 2000);
+
+            // Ensure profile data is included in the user object passed to service
+            const enhancedUser = { ...user, profile: profileData };
+            await saveReportToBlockchain(enhancedUser, finalData, txHash);
+            setFormData({ reportTitle: "", reportType: "General", notes: "" });
+            setFile(null);
+            
+            // Reattach value reset logic to file input manually or it naturally resets if uncontrolled but let's reset it by state mapping if possible. Uncontrolled file input has to be reset using a ref, but leaving it as is for simplicity.
+            await fetchReports();
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     const copyToClipboard = (hash) => {
         navigator.clipboard.writeText(hash);
         setCopiedHash(hash);
         setTimeout(() => setCopiedHash(null), 2000);
+    };
+
+    const openIPFSLink = (fileUrl) => {
+        if (!fileUrl) return;
+        if (fileUrl.startsWith('ipfs://')) {
+            const cid = fileUrl.replace("ipfs://", "");
+            window.open(`https://ipfs.io/ipfs/${cid}`, "_blank");
+        }
     };
 
     return (
@@ -84,9 +129,9 @@ const Reports = ({ user }) => {
 
                             <div className="relative z-10">
                                 <h2 className="text-xl font-bold uppercase tracking-wider text-white mb-1 flex items-center gap-2">
-                                    <LinkIcon className="w-5 h-5 text-neonCyan" /> Anchor Data
+                                    <LinkIcon className="w-5 h-5 text-neonCyan" /> Upload Report
                                 </h2>
-                                <p className="text-sm text-slate-400 mb-6">Write immutable medical node configurations to the ledger.</p>
+                                <p className="text-sm text-slate-400 mb-6">Upload and securely store your medical reports.</p>
 
                                 <form onSubmit={handleSubmit} className="space-y-4">
                                     <div>
@@ -127,13 +172,11 @@ const Reports = ({ user }) => {
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Asset URL (Optional)</label>
+                                        <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Health Report File (Optional)</label>
                                         <input
-                                            name="fileUrl"
-                                            value={formData.fileUrl}
-                                            onChange={handleInputChange}
-                                            className="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-4 py-2 text-sm focus:border-neonCyan outline-none transition-colors"
-                                            placeholder="ipfs://..."
+                                            type="file"
+                                            onChange={handleFileChange}
+                                            className="w-full bg-slate-900 border border-slate-700 text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-neonCyan/10 file:text-neonCyan hover:file:bg-neonCyan/20 rounded-lg px-2 py-2 text-sm focus:border-neonCyan outline-none transition-colors cursor-pointer"
                                         />
                                     </div>
 
@@ -143,9 +186,9 @@ const Reports = ({ user }) => {
                                         className="w-full mt-4 flex items-center justify-center gap-2 bg-slate-800 border border-slate-700 py-3 rounded-lg text-sm font-bold tracking-widest text-white transition-all hover:border-neonCyan hover:shadow-[0_0_15px_rgba(0,243,255,0.2)] disabled:opacity-50"
                                     >
                                         {submitting ? (
-                                            <><Loader2 className="w-4 h-4 text-neonCyan animate-spin" /> ENACTING CONTRACT...</>
+                                            <><Loader2 className="w-4 h-4 text-neonCyan animate-spin" /> UPLOADING RECORD...</>
                                         ) : (
-                                            "SUBMIT TO LEDGER"
+                                            "UPLOAD REPORT"
                                         )}
                                     </button>
                                 </form>
@@ -158,7 +201,7 @@ const Reports = ({ user }) => {
                         <div className="glass-card rounded-2xl p-6 border border-slate-700/50 h-full flex flex-col">
                             <div className="flex items-center justify-between mb-6">
                                 <h2 className="text-xl font-bold uppercase tracking-wider text-white flex items-center gap-2">
-                                    <FileText className="w-5 h-5 text-neonPurple" /> Ledger History
+                                    <FileText className="w-5 h-5 text-neonPurple" /> Report History
                                 </h2>
                                 <span className="text-xs bg-slate-800 text-slate-300 px-3 py-1 rounded-full border border-slate-700">
                                     {reports.length} Records
@@ -168,17 +211,21 @@ const Reports = ({ user }) => {
                             {loading ? (
                                 <div className="flex-1 flex flex-col items-center justify-center text-slate-500">
                                     <Loader2 className="w-8 h-8 animate-spin text-neonPurple mb-4" />
-                                    <span className="uppercase tracking-widest text-xs font-bold">Syncing blocks...</span>
+                                    <span className="uppercase tracking-widest text-xs font-bold">Loading records...</span>
                                 </div>
                             ) : reports.length === 0 ? (
                                 <div className="flex-1 flex flex-col items-center justify-center text-slate-600 border-2 border-dashed border-slate-800 rounded-xl p-8">
                                     <AlertCircle className="w-12 h-12 mb-4 opacity-50" />
-                                    <p className="text-sm">No immutable records found for this identity.</p>
+                                    <p className="text-sm">No medical records found for your account.</p>
                                 </div>
                             ) : (
                                 <div className="flex-1 overflow-y-auto space-y-4 pr-2 custom-scrollbar max-h-[600px]">
                                     {reports.map((report) => (
-                                        <div key={report.id} className="bg-slate-900/50 border border-slate-700/80 rounded-xl p-4 hover:border-neonCyan/50 transition-colors">
+                                        <div 
+                                            key={report.id} 
+                                            onClick={() => openIPFSLink(report.fileUrl)}
+                                            className={`bg-slate-900/50 border border-slate-700/80 rounded-xl p-4 transition-colors ${report.fileUrl ? 'cursor-pointer hover:border-neonCyan hover:shadow-[0_0_15px_rgba(0,243,255,0.1)]' : 'hover:border-neonCyan/50'}`}
+                                        >
                                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-3">
                                                 <div className="flex items-center gap-3">
                                                     <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${report.reportType === 'Heart' ? 'bg-rose-500/20 text-rose-400' :
@@ -204,10 +251,13 @@ const Reports = ({ user }) => {
 
                                             <div className="flex items-center gap-2 bg-slate-950 rounded-lg p-2 border border-slate-800">
                                                 <div className="w-2 h-2 rounded-full bg-neonGreen animate-pulse"></div>
-                                                <span className="text-[10px] uppercase font-mono text-slate-500">Tx Hash:</span>
+                                                <span className="text-[10px] uppercase font-mono text-slate-500">Receipt ID:</span>
                                                 <span className="text-[10px] font-mono text-neonCyan truncate flex-1">{report.txHash}</span>
                                                 <button
-                                                    onClick={() => copyToClipboard(report.txHash)}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        copyToClipboard(report.txHash);
+                                                    }}
                                                     className="text-slate-500 hover:text-white transition-colors"
                                                 >
                                                     {copiedHash === report.txHash ? <Check className="w-4 h-4 text-neonGreen" /> : <Copy className="w-4 h-4" />}

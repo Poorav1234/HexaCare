@@ -118,8 +118,8 @@ const CompleteProfile = ({ user }) => {
 
   return (
     <AuthLayout
-      title="Complete your HexaCare identity"
-      subtitle="Link a password and finalize your medical + blockchain profile."
+      title="Complete your HexaCare profile"
+      subtitle="Link a password and finalize your account profile."
     >
       <Toast
         message={serverError}
@@ -143,15 +143,15 @@ const CompleteProfile = ({ user }) => {
             <ShieldCheck className="w-12 h-12 text-neonGreen drop-shadow-[0_0_8px_rgba(0,255,102,0.8)]" />
           </div>
           <h1 className="text-2xl font-bold tracking-wider text-white mt-2 text-center">
-            COMPLETE <span className="text-neonGreen">IDENTITY</span>
+            COMPLETE <span className="text-neonGreen">PROFILE</span>
           </h1>
           <p className="text-slate-400 text-sm mt-2 text-center max-w-md">
             Welcome,{" "}
             <span className="text-white font-medium">
               {user.displayName || user.email}
             </span>
-            ! Please provide the required medical and blockchain details to
-            finalize your HexaCare node.
+            ! Please provide the required information to
+            finalize your HexaCare account.
           </p>
         </div>
 
@@ -369,14 +369,14 @@ const CompleteProfile = ({ user }) => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full relative group overflow-hidden rounded-lg bg-slate-800 border border-slate-700 py-3 px-4 text-sm font-medium text-white shadow-lg transition-all hover:border-neonGreen hover:shadow-[0_0_15px_rgba(0,255,102,0.3)] disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full relative group overflow-hidden rounded-lg bg-slate-800 border border-slate-700 py-3 px-4 text-sm font-medium text-white shadow-lg transition-all hover:border-neonGreen hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <div className="absolute inset-0 w-0 bg-gradient-to-r from-neonGreen/20 to-neonCyan/20 transition-all duration-[250ms] ease-out group-hover:w-full" />
-              <span className="relative flex items-center justify-center">
+              <span className="relative flex items-center justify-center font-bold tracking-wider">
                 {loading ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
                 ) : (
-                  "VERIFY & FINALIZE IDENTITY"
+                  "COMPLETE PROFILE"
                 )}
               </span>
             </button>

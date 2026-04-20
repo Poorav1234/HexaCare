@@ -8,9 +8,9 @@ export default {
     theme: {
         extend: {
             colors: {
-                neonCyan: '#00f3ff',
-                neonPurple: '#b000ff',
-                neonGreen: '#00ff66',
+                neonCyan: '#0ea5e9', // Sky blue replaces cyan
+                neonPurple: '#14b8a6', // Teal replaces purple
+                neonGreen: '#10b981', // Emerald green
                 darkLayer: 'rgba(15, 23, 42, 0.7)',
                 glassBorder: 'rgba(255, 255, 255, 0.1)'
             },

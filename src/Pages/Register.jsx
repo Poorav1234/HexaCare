@@ -130,8 +130,8 @@ const Register = () => {
 
   return (
     <AuthLayout
-      title="Initialize your HexaCare identity"
-      subtitle="Create your AI-ready, blockchain-linked health profile."
+      title="Create your HexaCare account"
+      subtitle="Sign up to access your personalized health dashboard."
     >
       <Toast
         message={serverError}
@@ -152,13 +152,12 @@ const Register = () => {
 
         <div className="relative z-10 flex flex-col items-center mb-8">
           <div className="relative mb-2">
-            <Hexagon className="w-10 h-10 text-neonCyan absolute animate-pulse opacity-50" />
-            <HeartPulse className="w-10 h-10 text-neonPurple relative z-10 drop-shadow-[0_0_8px_rgba(176,0,255,0.8)]" />
+            <HeartPulse className="w-10 h-10 text-neonPurple relative z-10 drop-shadow-md" />
           </div>
           <h1 className="text-2xl font-bold tracking-wider text-white mt-4">
-            INITIALIZE <span className="text-neonCyan">NODE</span>
+            CREATE <span className="text-neonCyan">ACCOUNT</span>
           </h1>
-          <p className="text-slate-400 text-sm mt-1">Create your HexaCare identity</p>
+          <p className="text-slate-400 text-sm mt-1">Sign up for a new account</p>
         </div>
 
         <form onSubmit={handleManualRegister} className="space-y-5 relative z-10">
@@ -414,14 +413,14 @@ const Register = () => {
             <button
               type="submit"
               disabled={loading || googleLoading}
-              className="w-full relative group overflow-hidden rounded-lg bg-slate-800 border border-slate-700 py-3 px-4 text-sm font-medium text-white shadow-lg transition-all hover:border-neonCyan hover:shadow-[0_0_15px_rgba(0,243,255,0.3)] disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full relative group overflow-hidden rounded-lg bg-slate-800 border border-slate-700 py-3 px-4 text-sm font-medium text-white shadow-lg transition-all hover:border-neonCyan hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <div className="absolute inset-0 w-0 bg-gradient-to-r from-neonCyan/20 to-neonPurple/20 transition-all duration-[250ms] ease-out group-hover:w-full" />
-              <span className="relative flex items-center justify-center">
+              <span className="relative flex items-center justify-center font-bold tracking-wider">
                 {loading ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
                 ) : (
-                  "REGISTER NODE IDENTIFIER"
+                  "CREATE ACCOUNT"
                 )}
               </span>
             </button>
@@ -469,12 +468,12 @@ const Register = () => {
         </button>
 
         <p className="mt-8 text-center text-xs text-slate-500 relative z-10">
-          Already verified?{" "}
+          Already have an account?{" "}
           <Link
             to="/login"
             className="text-neonPurple hover:text-white transition-colors"
           >
-            Access System
+            Sign In
           </Link>
         </p>
       </div>

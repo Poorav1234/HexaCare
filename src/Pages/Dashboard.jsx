@@ -25,7 +25,7 @@ const FeatureCard = ({ title, description, icon: Icon, path, onClick }) => (
             onClick={() => onClick(path)}
             className="flex items-center gap-2 text-sm font-medium text-neonCyan hover:text-white transition-colors relative z-10"
         >
-            Initialize Module <ChevronRight className="w-4 h-4" />
+            View Service <ChevronRight className="w-4 h-4" />
         </button>
     </div>
 );
@@ -53,6 +53,23 @@ const Dashboard = ({ user }) => {
         fetchProfileData();
     }, [user]);
 
+    useEffect(() => {
+        const autoConnectWallet = async () => {
+            if (window.ethereum) {
+                try {
+                    await window.ethereum.request({ method: 'eth_requestAccounts' });
+                    console.log("Wallet connected successfully");
+                } catch (error) {
+                    console.error("Wallet connection denied:", error);
+                }
+            } else {
+                console.warn("MetaMask or Web3 wallet is not installed");
+            }
+        };
+        // Trigger auto connect as soon as the dashboard loads
+        autoConnectWallet();
+    }, []);
+
     const handleNavigate = (path) => {
         navigate(path);
     };
@@ -67,32 +84,32 @@ const Dashboard = ({ user }) => {
 
     const features = [
         {
-            title: "Blockchain Reports",
-            description: "Secure medical documents onto the distributed ledger.",
+            title: "My Health Reports",
+            description: "View and manage your medical test documents.",
             icon: FileText,
             path: "/reports",
         },
         {
             title: "Heart Risk Inference",
-            description: "Evaluate cardiovascular vulnerabilities using health metrics.",
+            description: "Evaluate heart health risks using daily metrics.",
             icon: HeartPulse,
             path: "/predict/heart",
         },
         {
             title: "Diabetes Risk Inference",
-            description: "Analyze glucose and BMI to classify metabolic risks.",
+            description: "Analyze glucose and BMI for metabolic insights.",
             icon: Droplet,
             path: "/predict/diabetes",
         },
         {
             title: "Cancer Risk Inference",
-            description: "Process lifestyle and genetic factors for oncology risk.",
+            description: "Process lifestyle factors for oncology insights.",
             icon: Activity,
             path: "/predict/cancer",
         },
         {
             title: "Overall Health Inference",
-            description: "Comprehensive system evaluation of your well-being.",
+            description: "Comprehensive evaluation of your overall health.",
             icon: ShieldAlert,
             path: "/predict/overall",
         },
@@ -113,14 +130,14 @@ const Dashboard = ({ user }) => {
                                     Welcome back, <span className="text-neonPurple">{profileData?.fullName || "User"}</span>
                                 </h1>
                                 <p className="text-slate-400">
-                                    Your neural-health interface is synchronized. All biometric sub-systems are operating normally.
+                                    Your health dashboard is ready. All features are active and running.
                                 </p>
                             </div>
                             <div className="hidden md:block text-right">
                                 <p className="text-xs text-slate-500 uppercase tracking-widest mb-1">Status</p>
                                 <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded bg-neonGreen/10 border border-neonGreen/20 text-neonGreen text-sm font-medium">
                                     <span className="w-2 h-2 rounded-full bg-neonGreen animate-pulse"></span>
-                                    OPTIMUM
+                                    Healthy
                                 </div>
                             </div>
                         </div>
@@ -130,7 +147,7 @@ const Dashboard = ({ user }) => {
                     <section>
                         <div className="flex items-center justify-between mb-6">
                             <h2 className="text-xl font-bold text-white tracking-wide">
-                                AVAILABLE MODULES
+                                Available Services
                             </h2>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
