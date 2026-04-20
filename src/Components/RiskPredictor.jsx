@@ -65,19 +65,47 @@ const RiskPredictor = ({ title, type, user, inputsConfig }) => {
         e.preventDefault();
         setLoading(true);
 
-        // Simulated prediction delay
-        setTimeout(async () => {
-            const { score, riskLevel } = evaluateRisk(formData);
+        try {
+            let score = 0;
+            let riskLevel = "Low";
+            let predictionProbability = null;
+
+            // Format payload generically for the backend API
+            const payload = { ...formData };
+
+            // Attempt to hit our scalable background ML endpoint natively resolving the route parameter
+            const response = await fetch(`http://localhost:8000/predict/${type}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                riskLevel = data.risk === "High Risk" ? "High" : "Low";
+                score = Math.round(data.probability * 100);
+                predictionProbability = data.probability;
+            } else {
+                // If it fails (e.g. 404 because the model folder doesn't exist yet), fallback dynamically
+                console.warn(`[ML Node] Native Model for '${type}' not attached. Resolving deterministic offline function...`);
+                const evalResult = evaluateRisk(formData);
+                score = evalResult.score;
+                riskLevel = evalResult.riskLevel;
+            }
 
             try {
                 await savePrediction(user, type, formData, riskLevel, score);
-                setResult({ riskLevel, score, inputs: formData });
-            } catch (err) {
-                console.error("Failed to save prediction", err);
-            } finally {
-                setLoading(false);
+            } catch (saveErr) {
+                console.error("Failed to save prediction, but continuing with display", saveErr);
             }
-        }, 1200);
+            
+            setResult({ riskLevel, score, predictionProbability, inputs: formData });
+        } catch (err) {
+            console.error("Failed to execute prediction", err);
+            alert("Error in prediction: " + err.message);
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -122,11 +150,27 @@ const RiskPredictor = ({ title, type, user, inputsConfig }) => {
                                                     />
                                                     <span className="text-sm text-slate-300">Yes, applies to me</span>
                                                 </div>
+                                            ) : input.type === 'select' ? (
+                                                <select
+                                                    name={input.name}
+                                                    required
+                                                    defaultValue=""
+                                                    onChange={handleChange}
+                                                    className="w-full bg-slate-900 border border-slate-700/80 text-white rounded-xl px-4 py-3 text-sm focus:border-neonPurple focus:ring-1 focus:ring-neonPurple outline-none transition-all"
+                                                >
+                                                    <option value="" disabled>Select {input.label}</option>
+                                                    {input.options.map(opt => (
+                                                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                                    ))}
+                                                </select>
                                             ) : (
                                                 <input
                                                     type={input.type}
                                                     name={input.name}
                                                     required
+                                                    min={input.min}
+                                                    max={input.max}
+                                                    step={input.step}
                                                     onChange={handleChange}
                                                     placeholder={input.placeholder}
                                                     className="w-full bg-slate-900 border border-slate-700/80 text-white rounded-xl px-4 py-3 text-sm focus:border-neonPurple focus:ring-1 focus:ring-neonPurple outline-none transition-all placeholder-slate-600"
@@ -171,6 +215,12 @@ const RiskPredictor = ({ title, type, user, inputsConfig }) => {
                                 <h3 className="text-4xl font-black text-white mb-4 tracking-wider">
                                     Risk: <span className={result.riskLevel === 'Low' ? 'text-neonGreen' : result.riskLevel === 'Medium' ? 'text-yellow-400' : 'text-rose-400'}>{result.riskLevel.toUpperCase()}</span>
                                 </h3>
+                                
+                                {result.predictionProbability !== undefined && result.predictionProbability !== null && (
+                                    <p className="text-slate-300 text-lg mb-6 shadow-sm border border-slate-700/50 rounded-lg py-2 px-4 shadow-neonPurple/5">
+                                        ML Evaluated Probability: <span className="text-white font-bold">{(result.predictionProbability * 100).toFixed(1)}%</span>
+                                    </p>
+                                )}
 
                                 <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4 max-w-md w-full mb-8 text-left">
                                     <h4 className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
