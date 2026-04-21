@@ -24,6 +24,9 @@ import AdminRoute from "./admin/AdminRoute";
 import AdminDashboard from "./admin/AdminDashboard";
 import AdminManagement from "./admin/AdminManagement";
 import AdminLogs from "./admin/AdminLogs";
+import AdminUsers from "./admin/AdminUsers";
+import AdminReports from "./admin/AdminReports";
+import AdminProfile from "./admin/AdminProfile";
 
 const IS_DEV =
   import.meta.env.MODE === "development" ||
@@ -242,10 +245,34 @@ function App() {
               }
             />
             <Route
+              path="/admin/users"
+              element={
+                <AdminRoute user={user}>
+                  <AdminUsers user={user} />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/reports"
+              element={
+                <AdminRoute user={user}>
+                  <AdminReports user={user} />
+                </AdminRoute>
+              }
+            />
+            <Route
               path="/admin/logs"
               element={
                 <AdminRoute user={user}>
                   <AdminLogs user={user} />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/profile"
+              element={
+                <AdminRoute user={user}>
+                  <AdminProfile user={user} />
                 </AdminRoute>
               }
             />

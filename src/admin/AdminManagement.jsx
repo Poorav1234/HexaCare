@@ -1,5 +1,6 @@
 // src/admin/AdminManagement.jsx
 // Super-admin-only page for creating, viewing, and toggling admin users.
+// Requires password re-authentication before allowing admin creation.
 
 import React, { useEffect, useState } from "react";
 import {
@@ -17,7 +18,10 @@ import {
     Eye,
     EyeOff,
     AlertTriangle,
+    KeyRound,
 } from "lucide-react";
+import { signInWithEmailAndPassword } from "firebase/auth";
+import { auth } from "../firebase/firebaseConfig";
 import AdminLayout from "./AdminLayout";
 import {
     createAdminUser,
@@ -30,6 +34,12 @@ const AdminManagement = ({ user }) => {
     const [admins, setAdmins] = useState([]);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
+
+    // ── Re-auth Gate ─────────────────────────────────────────────────────────
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [authPassword, setAuthPassword] = useState("");
+    const [authError, setAuthError] = useState("");
+    const [authLoading, setAuthLoading] = useState(false);
 
     const [form, setForm] = useState({
         name: "",
@@ -158,6 +168,27 @@ const AdminManagement = ({ user }) => {
         setTimeout(() => setCopiedField(null), 2000);
     };
 
+    // ── Re-authentication Handler ────────────────────────────────────────────
+    const handleReAuth = async (e) => {
+        e.preventDefault();
+        if (!authPassword) { setAuthError("Password is required."); return; }
+        setAuthLoading(true);
+        setAuthError("");
+        try {
+            await signInWithEmailAndPassword(auth, user.email, authPassword);
+            setIsAuthenticated(true);
+            setAuthPassword("");
+        } catch (err) {
+            if (err.code === "auth/wrong-password" || err.code === "auth/invalid-credential") {
+                setAuthError("Incorrect password. Please try again.");
+            } else {
+                setAuthError(err.message || "Authentication failed.");
+            }
+        } finally {
+            setAuthLoading(false);
+        }
+    };
+
     // ── Render ───────────────────────────────────────────────────────────────
     return (
         <AdminLayout user={user}>
@@ -178,6 +209,61 @@ const AdminManagement = ({ user }) => {
                     <div className="glass-card rounded-2xl p-6 border border-slate-700/50 relative overflow-hidden">
                         <div className="absolute top-0 right-0 w-28 h-28 bg-neonPurple/10 blur-3xl rounded-full pointer-events-none" />
 
+                        {!isAuthenticated ? (
+                            /* ── Re-auth Gate ──────────────────────────── */
+                            <div className="relative z-10">
+                                <div className="text-center mb-6">
+                                    <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
+                                        <KeyRound className="w-8 h-8 text-amber-400" />
+                                    </div>
+                                    <h2 className="text-lg font-bold text-white uppercase tracking-widest mb-1">
+                                        Verify Identity
+                                    </h2>
+                                    <p className="text-xs text-slate-500">
+                                        Re-enter your password to access admin creation.
+                                    </p>
+                                </div>
+
+                                <form onSubmit={handleReAuth} className="space-y-4">
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">
+                                            Super Admin Password
+                                        </label>
+                                        <div className="relative">
+                                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                                <Lock className="w-4 h-4 text-slate-500" />
+                                            </div>
+                                            <input
+                                                type="password"
+                                                value={authPassword}
+                                                onChange={(e) => { setAuthPassword(e.target.value); setAuthError(""); }}
+                                                placeholder="Enter your password"
+                                                className={`w-full bg-slate-900 border ${authError ? "border-red-500/50" : "border-slate-700 focus:border-amber-400"} text-white rounded-xl pl-9 pr-4 py-2.5 text-sm outline-none transition-colors placeholder-slate-600`}
+                                            />
+                                        </div>
+                                        {authError && <p className="mt-1 text-xs text-red-400">{authError}</p>}
+                                    </div>
+
+                                    <button
+                                        type="submit"
+                                        disabled={authLoading}
+                                        className="w-full flex items-center justify-center gap-2 bg-slate-800 border border-amber-500/30 py-3 rounded-xl text-sm font-bold tracking-wider text-white transition-all hover:border-amber-400 hover:shadow-[0_0_20px_rgba(245,158,11,0.15)] disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {authLoading ? (
+                                            <><Loader2 className="w-4 h-4 animate-spin text-amber-400" /> VERIFYING...</>
+                                        ) : (
+                                            <><Shield className="w-4 h-4 text-amber-400" /> AUTHENTICATE</>
+                                        )}
+                                    </button>
+                                </form>
+
+                                <p className="text-center text-[10px] text-slate-600 mt-4">
+                                    This ensures only verified super admins can create new accounts.
+                                </p>
+                            </div>
+                        ) : (
+                            /* ── Create Form (after auth) ──────────────── */
+                            <>
                         <h2 className="relative z-10 text-lg font-bold text-white uppercase tracking-widest mb-1 flex items-center gap-2">
                             <UserPlus className="w-5 h-5 text-neonPurple" />
                             Create Admin
@@ -401,6 +487,8 @@ const AdminManagement = ({ user }) => {
                                     </div>
                                 )}
                             </div>
+                        )}
+                            </>
                         )}
                     </div>
                 </div>

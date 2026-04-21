@@ -135,11 +135,26 @@ const RiskPredictor = ({ title, type, user, inputsConfig }) => {
 
                             <form onSubmit={handlePredict} className="space-y-6 relative z-10">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    {inputsConfig.map((input) => (
-                                        <div key={input.name}>
-                                            <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">
-                                                {input.label}
-                                            </label>
+                                    {inputsConfig.map((input) => {
+                                        // Handle conditional visibility (e.g., pregnancies only for females)
+                                        if (input.conditional) {
+                                            const conditionValue = formData[input.conditional];
+                                            const shouldShow = input.conditionalValue !== undefined 
+                                                ? conditionValue === input.conditionalValue 
+                                                : !!conditionValue;
+                                            
+                                            if (!shouldShow) return null;
+                                        }
+
+                                        return (
+                                            <div key={input.name}>
+                                                <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">
+                                                    {input.label}
+                                                    {input.optional && <span className="text-slate-500 text-xs ml-2">(optional)</span>}
+                                                </label>
+                                                {input.help && (
+                                                    <p className="text-xs text-slate-500 mb-2 italic">{input.help}</p>
+                                                )}
                                             {input.type === 'checkbox' ? (
                                                 <div className="flex items-center gap-3 bg-slate-900/50 p-3 rounded-xl border border-slate-700/50">
                                                     <input
@@ -176,8 +191,9 @@ const RiskPredictor = ({ title, type, user, inputsConfig }) => {
                                                     className="w-full bg-slate-900 border border-slate-700/80 text-white rounded-xl px-4 py-3 text-sm focus:border-neonPurple focus:ring-1 focus:ring-neonPurple outline-none transition-all placeholder-slate-600"
                                                 />
                                             )}
-                                        </div>
-                                    ))}
+                                            </div>
+                                        );
+                                    })}
                                 </div>
 
                                 <div className="pt-6 border-t border-slate-800">
