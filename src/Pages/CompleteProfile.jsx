@@ -52,9 +52,19 @@ const CompleteProfile = ({ user }) => {
       newErrors.confirmPassword = "Passwords do not match";
     }
 
-    if (!formData.phoneNumber) newErrors.phoneNumber = "Phone number is required";
-    else if (!isValidPhoneNumber(formData.phoneNumber))
-      newErrors.phoneNumber = "Invalid phone number";
+    if (!formData.phoneNumber) {
+      newErrors.phoneNumber = "Phone number is required";
+    } else {
+      const digits = formData.phoneNumber.replace(/\D/g, "");
+      if (
+        !isValidPhoneNumber(formData.phoneNumber) ||
+        /(\d)\1{7,}/.test(digits) ||
+        digits.includes("123456789") ||
+        digits.includes("987654321")
+      ) {
+        newErrors.phoneNumber = "Invalid phone number";
+      }
+    }
 
     if (!formData.gender) newErrors.gender = "Gender is required";
     if (!formData.dateOfBirth) newErrors.dateOfBirth = "Date of birth is required";

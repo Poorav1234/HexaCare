@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { User, Mail, Phone, Calendar, Droplet, Wallet, ShieldCheck, Cpu, Settings, Edit3, Save, X, Loader2 } from "lucide-react";
 import NavBar from "../Components/NavBar";
 import { getUserProfile, updateUserProfileFields } from "../firebase/dbService";
-import PhoneInput from 'react-phone-number-input';
+import PhoneInput, { isValidPhoneNumber } from 'react-phone-number-input';
 import 'react-phone-number-input/style.css';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
@@ -38,6 +38,19 @@ const Profile = ({ user }) => {
     };
 
     const handleSave = async () => {
+        if (editForm.phoneNumber) {
+            const digits = editForm.phoneNumber.replace(/\D/g, "");
+            if (
+                !isValidPhoneNumber(editForm.phoneNumber) ||
+                /(\d)\1{7,}/.test(digits) ||
+                digits.includes("123456789") ||
+                digits.includes("987654321")
+            ) {
+                alert("Please enter a valid phone number.");
+                return;
+            }
+        }
+
         setSaving(true);
         try {
             await updateUserProfileFields(user.uid, editForm);
