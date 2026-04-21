@@ -12,6 +12,7 @@ import { initializeSuperAdmin } from "./firebase/adminService";
 
 import Login from "./Pages/Login";
 import Register from "./Pages/Register";
+import ForgotPassword from "./Pages/ForgotPassword";
 import CompleteProfile from "./Pages/CompleteProfile";
 import Dashboard from "./Pages/Dashboard";
 import Reports from "./Pages/Reports";
@@ -153,6 +154,17 @@ function App() {
                   <Navigate to={homeRoute} />
                 ) : (
                   <Register />
+                )
+              }
+            />
+
+            <Route
+              path="/forgot-password"
+              element={
+                user && user.profileCompleted ? (
+                  <Navigate to={homeRoute} />
+                ) : (
+                  <ForgotPassword />
                 )
               }
             />

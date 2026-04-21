@@ -1,3 +1,4 @@
+require("dotenv").config();
 const express = require("express");
 const multer = require("multer");
 const axios = require("axios");
@@ -10,6 +11,10 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 const upload = multer({ dest: "uploads/" });
+
+// ── Auth Security Routes ─────────────────────────────────────────────────────
+const authRoutes = require("./routes/authRoutes");
+app.use("/auth", authRoutes);
 
 // 🔑 Add your keys
 const PINATA_API_KEY = "49775d0589707bce94f1";
