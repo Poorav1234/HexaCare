@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException, Path
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Dict, Any
-import pickle
+import joblib
 import pandas as pd
 import os
 
@@ -33,12 +33,9 @@ def load_models():
         model_path = os.path.join(models_dir, model_name)
         if os.path.isdir(model_path):
             try:
-                with open(os.path.join(model_path, "model.pkl"), 'rb') as f:
-                    model = pickle.load(f)
-                with open(os.path.join(model_path, "scaler.pkl"), 'rb') as f:
-                    scaler = pickle.load(f)
-                with open(os.path.join(model_path, "features.pkl"), 'rb') as f:
-                    features = pickle.load(f)
+                model = joblib.load(os.path.join(model_path, "model.pkl"))
+                scaler = joblib.load(os.path.join(model_path, "scaler.pkl"))
+                features = joblib.load(os.path.join(model_path, "features.pkl"))
                 
                 artifacts[model_name] = {
                     "model": model,
@@ -76,7 +73,15 @@ def predict_risk(disease_type: str, data: Dict[str, Any]):
                 col_name = f"{cat_feat}_{int(data[cat_feat])}"
                 if col_name in expected_features:
                     df_data[col_name] = 1.0
-                    
+    if disease_type == "diabetes":
+        if "gender" in data:
+            if data["gender"] == "Male" and "gender_Male" in expected_features:
+                df_data["gender_Male"] = 1.0
+
+        if "smoking_history" in data:
+            col = f"smoking_history_{data['smoking_history']}"
+            if col in expected_features:
+                df_data[col] = 1.0            
     # Initialize dataframe natively resolving mapping bounds
     input_df = pd.DataFrame([df_data])[expected_features]
     
@@ -91,12 +96,19 @@ def predict_risk(disease_type: str, data: Dict[str, Any]):
 
     # 4. Predict
     try:
-        prediction = model.predict(scaled_input)[0]
-        
-        probability = 0.0
         if hasattr(model, "predict_proba"):
             probs = model.predict_proba(scaled_input)[0]
-            probability = probs[1] if len(probs) > 1 else probs[0]
+            probability = float(probs[1]) if len(probs) > 1 else float(probs[0])
+            
+            # Apply your specific threshold for diabetes
+            if disease_type == "diabetes":
+                threshold = 0.3  # your tuned value
+                prediction = 1 if probability > threshold else 0
+            else:
+                prediction = int(model.predict(scaled_input)[0])
+        else:
+            probability = 0.0
+            prediction = int(model.predict(scaled_input)[0])
             
         risk_level = "High Risk" if int(prediction) == 1 else "Low Risk"
         

@@ -22,10 +22,21 @@ const configs = {
     diabetes: {
         title: "Diabetes",
         inputs: [
-            { name: "glucose", label: "Glucose Level", type: "number", placeholder: "e.g. 110" },
-            { name: "bmi", label: "BMI", type: "number", placeholder: "e.g. 25.5" },
-            { name: "age", label: "Age", type: "number", placeholder: "e.g. 45" },
-            { name: "bloodPressure", label: "Blood Pressure", type: "number", placeholder: "e.g. 70" },
+            { name: "age", label: "Age", type: "number", placeholder: "e.g. 45", min: 0, max: 120 },
+            { name: "gender", label: "Gender", type: "select", options: [{label: "Female", value: "Female"}, {label: "Male", value: "Male"}, {label: "Other", value: "Other"}] },
+            { name: "hypertension", label: "Do you have high blood pressure?", type: "select", options: [{label: "No", value: 0}, {label: "Yes", value: 1}] },
+            { name: "heart_disease", label: "Do you have a history of heart disease?", type: "select", options: [{label: "No", value: 0}, {label: "Yes", value: 1}] },
+            { name: "bmi", label: "Body Mass Index (BMI)", type: "number", step: "0.1", placeholder: "e.g. 25.5" },
+            { name: "HbA1c_level", label: "Hemoglobin A1c (HbA1c) Level", type: "number", step: "0.1", placeholder: "e.g. 5.5" },
+            { name: "blood_glucose_level", label: "Blood Glucose Level", type: "number", placeholder: "e.g. 100" },
+            { name: "smoking_history", label: "Smoking History", type: "select", options: [
+                {label: "Never Smoked", value: "never"},
+                {label: "Currently Smoking", value: "current"},
+                {label: "Former Smoker", value: "former"},
+                {label: "Smoked in the past", value: "ever"},
+                {label: "Not Currently Smoking", value: "not current"},
+                {label: "Prefer not to say / No Info", value: "No Info"}
+            ] },
         ]
     },
     cancer: {
