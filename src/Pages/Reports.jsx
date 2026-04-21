@@ -66,7 +66,8 @@ const Reports = ({ user }) => {
                 const uploadData = new FormData();
                 uploadData.append("file", file);
 
-                const res = await fetch("http://localhost:5000/upload", {
+                const backendUrl = import.meta.env.VITE_BACKEND_URL || `http://${window.location.hostname}:5000`;
+                const res = await fetch(`${backendUrl}/upload`, {
                     method: "POST",
                     body: uploadData
                 });
@@ -78,6 +79,7 @@ const Reports = ({ user }) => {
                 
                 if (!window.ethereum) throw new Error("MetaMask not found");
                 const provider = new ethers.BrowserProvider(window.ethereum);
+                await provider.send("eth_requestAccounts", []);
                 const signer = await provider.getSigner();
                 const contract = new ethers.Contract("0xe8e112009bf378220FAeDBf8BDDe368f827d4cCA", ["function addRecord(string memory _cid) public"], signer);
                 
