@@ -14,6 +14,8 @@ import {
     Menu,
     X,
     Shield,
+    FileText,
+    User,
 } from "lucide-react";
 import { logoutUser } from "../firebase/authService";
 
@@ -25,15 +27,30 @@ const sidebarLinks = [
         exact: true,
     },
     {
+        name: "Users",
+        path: "/admin/users",
+        icon: Users,
+    },
+    {
+        name: "Reports",
+        path: "/admin/reports",
+        icon: FileText,
+    },
+    {
         name: "Admin Management",
         path: "/admin/management",
-        icon: Users,
+        icon: Shield,
         superOnly: true,
     },
     {
         name: "Activity Logs",
         path: "/admin/logs",
         icon: ScrollText,
+    },
+    {
+        name: "My Profile",
+        path: "/admin/profile",
+        icon: User,
     },
 ];
 

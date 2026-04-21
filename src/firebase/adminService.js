@@ -338,6 +338,49 @@ export async function toggleAdminStatus(
     }
 }
 
+// ─── All Users (Admin View) ──────────────────────────────────────────────────
+
+/**
+ * Fetch every user from RTDB with full profile data (for admin user list).
+ */
+export async function getAllUsers() {
+    try {
+        const usersSnapshot = await get(ref(rtdb, "users"));
+        if (!usersSnapshot.exists()) return [];
+
+        const users = Object.entries(usersSnapshot.val()).map(([uid, data]) => ({
+            uid,
+            ...data,
+        }));
+
+        return users.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    } catch (error) {
+        console.error("[Admin] Failed to fetch all users:", error);
+        return [];
+    }
+}
+
+// ─── All Reports (Admin View) ────────────────────────────────────────────────
+
+/**
+ * Fetch all reports from Firestore for the admin reports list.
+ */
+export async function getAllReportsAdmin() {
+    try {
+        const snapshot = await getDocs(collection(db, "reports"));
+        return snapshot.docs
+            .map((d) => ({ id: d.id, ...d.data() }))
+            .sort((a, b) => {
+                const aTime = a.createdAt?.seconds || 0;
+                const bTime = b.createdAt?.seconds || 0;
+                return bTime - aTime;
+            });
+    } catch (error) {
+        console.error("[Admin] Failed to fetch reports:", error);
+        return [];
+    }
+}
+
 // ─── System Statistics ───────────────────────────────────────────────────────
 
 /**
