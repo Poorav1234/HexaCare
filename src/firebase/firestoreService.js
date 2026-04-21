@@ -49,29 +49,33 @@ export const saveReportToBlockchain = async (user, reportData, realTxHash = null
 export const getUserReports = async (uid) => {
     let firebaseReports = [];
     try {
+        // NOTE: No orderBy here — combining where() + orderBy() on different fields
+        // requires a Firestore composite index. Without one it silently fails.
+        // We sort in JavaScript below instead.
         const q = query(
             collection(db, "reports"),
-            where("uid", "==", uid),
-            orderBy("createdAt", "desc")
+            where("uid", "==", uid)
         );
         const querySnapshot = await Promise.race([
             getDocs(q),
-            new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 5000))
+            new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 8000))
         ]);
         firebaseReports = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        console.log("[Firestore] Loaded", firebaseReports.length, "reports from Firebase.");
     } catch (error) {
-        console.warn("[Firebase] Firestore read denied or timed out. Relying on local cache.");
+        console.warn("[Firebase] Firestore read failed:", error.message);
     }
-    
-    // Always merge with local cache to prevent data erasure for offline entries
+
+    // Merge with local cache (covers offline / permission-denied fallback entries)
     const local = JSON.parse(localStorage.getItem('reports') || "[]").filter(r => r.uid === uid);
     const allReportsMap = new Map();
-    
+
+    // Firebase reports win over local duplicates
     [...local, ...firebaseReports].forEach(r => allReportsMap.set(r.id, r));
-    
+
     return Array.from(allReportsMap.values()).sort((a, b) => {
-        const timeA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : a.createdAt;
-        const timeB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : b.createdAt;
+        const timeA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : (a.createdAt || 0);
+        const timeB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : (b.createdAt || 0);
         return timeB - timeA;
     });
 };
@@ -108,26 +112,25 @@ export const getUserPredictions = async (uid) => {
     try {
         const q = query(
             collection(db, "predictions"),
-            where("uid", "==", uid),
-            orderBy("createdAt", "desc")
+            where("uid", "==", uid)
         );
         const querySnapshot = await Promise.race([
             getDocs(q),
-            new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 5000))
+            new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 8000))
         ]);
         firebasePredictions = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     } catch (error) {
-        console.warn("[Firebase] Firestore read denied or timed out. Relying on local predictions.");
+        console.warn("[Firebase] Firestore read failed:", error.message);
     }
 
     const local = JSON.parse(localStorage.getItem('predictions') || "[]").filter(r => r.uid === uid);
     const allPredictionsMap = new Map();
-    
+
     [...local, ...firebasePredictions].forEach(r => allPredictionsMap.set(r.id, r));
-    
+
     return Array.from(allPredictionsMap.values()).sort((a, b) => {
-        const timeA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : a.createdAt;
-        const timeB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : b.createdAt;
+        const timeA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : (a.createdAt || 0);
+        const timeB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : (b.createdAt || 0);
         return timeB - timeA;
     });
 };

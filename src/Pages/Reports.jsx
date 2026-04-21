@@ -14,6 +14,8 @@ const Reports = ({ user }) => {
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [copiedHash, setCopiedHash] = useState(null);
+    const [uploadError, setUploadError] = useState("");
+    const [uploadSuccess, setUploadSuccess] = useState("");
 
     useEffect(() => {
         const fetchProfileData = async () => {
@@ -57,6 +59,8 @@ const Reports = ({ user }) => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         setSubmitting(true);
+        setUploadError("");
+        setUploadSuccess("");
 
         try {
             let finalData = { ...formData, fileUrl: "" };
@@ -67,25 +71,35 @@ const Reports = ({ user }) => {
                 uploadData.append("file", file);
 
                 const backendUrl = import.meta.env.VITE_BACKEND_URL || `http://${window.location.hostname}:5000`;
-                const res = await fetch(`${backendUrl}/upload`, {
-                    method: "POST",
-                    body: uploadData
-                });
 
-                if (!res.ok) throw new Error("Upload failed");
+                let res;
+                try {
+                    res = await fetch(`${backendUrl}/upload`, {
+                        method: "POST",
+                        body: uploadData
+                    });
+                } catch (networkErr) {
+                    throw new Error("Cannot connect to the backend server. Make sure it is running on port 5000 (run: cd backend && node server.js).");
+                }
+
+                if (!res.ok) {
+                    const errData = await res.json().catch(() => ({}));
+                    throw new Error(errData.error || `Backend returned error ${res.status}`);
+                }
                 const resData = await res.json();
 
                 finalData.fileUrl = `ipfs://${resData.cid}`;
-                
-                if (!window.ethereum) throw new Error("MetaMask not found");
+
+                if (!window.ethereum) throw new Error("MetaMask not found. Please install MetaMask to interact with the blockchain.");
                 const provider = new ethers.BrowserProvider(window.ethereum);
                 await provider.send("eth_requestAccounts", []);
                 const signer = await provider.getSigner();
                 const contract = new ethers.Contract("0xe8e112009bf378220FAeDBf8BDDe368f827d4cCA", ["function addRecord(string memory _cid) public"], signer);
-                
+
                 const tx = await contract.addRecord(resData.cid);
-                await tx.wait(); // wait for blockchain confirmation
-                
+                setUploadSuccess("File uploaded to IPFS! Waiting for blockchain confirmation...");
+                await tx.wait();
+
                 txHash = tx.hash;
             }
 
@@ -94,11 +108,12 @@ const Reports = ({ user }) => {
             await saveReportToBlockchain(enhancedUser, finalData, txHash);
             setFormData({ reportTitle: "", reportType: "General", notes: "" });
             setFile(null);
-            
-            // Reattach value reset logic to file input manually or it naturally resets if uncontrolled but let's reset it by state mapping if possible. Uncontrolled file input has to be reset using a ref, but leaving it as is for simplicity.
+            setUploadSuccess(file ? "✅ Report uploaded to IPFS and recorded on blockchain!" : "✅ Report saved successfully.");
+
             await fetchReports();
         } catch (error) {
             console.error(error);
+            setUploadError(error.message || "Upload failed. Please check the console for details.");
         } finally {
             setSubmitting(false);
         }
@@ -136,6 +151,19 @@ const Reports = ({ user }) => {
                                 <p className="text-sm text-slate-400 mb-6">Upload and securely store your medical reports.</p>
 
                                 <form onSubmit={handleSubmit} className="space-y-4">
+
+                                    {/* Error/Success Banners */}
+                                    {uploadError && (
+                                        <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/30 text-red-400 text-xs rounded-lg px-4 py-3">
+                                            <span className="mt-0.5">⚠️</span>
+                                            <span>{uploadError}</span>
+                                        </div>
+                                    )}
+                                    {uploadSuccess && (
+                                        <div className="flex items-start gap-2 bg-green-500/10 border border-green-500/30 text-green-400 text-xs rounded-lg px-4 py-3">
+                                            <span>{uploadSuccess}</span>
+                                        </div>
+                                    )}
                                     <div>
                                         <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Report Title</label>
                                         <input
