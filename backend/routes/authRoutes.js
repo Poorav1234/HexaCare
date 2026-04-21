@@ -22,6 +22,25 @@ const { sendOtpEmail, sendLockNotification } = require("../services/emailService
 const FIREBASE_API_KEY = process.env.FIREBASE_API_KEY;
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:5000";
 
+const admin = require("../firebaseAdmin");
+
+async function logSecurityEventServer(email, action, metadata = {}, severity = "info") {
+    if (!admin) return;
+    try {
+        const db = admin.firestore();
+        await db.collection("activityLogs").add({
+            userId: "",
+            email: email || "unknown",
+            action,
+            metadata,
+            severity,
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        });
+    } catch (err) {
+        // silent fail
+    }
+}
+
 // ── Simple Rate Limiter ─────────────────────────────────────────────────────
 const otpRequestCounts = new Map();
 
@@ -74,11 +93,6 @@ router.post("/login/request-otp", async (req, res) => {
         });
     }
 
-    // Rate-limit OTP requests
-    if (!checkOtpRateLimit(`login:${email}`, 3)) {
-        return res.status(429).json({ error: "Too many OTP requests. Please wait a moment." });
-    }
-
     try {
         // Verify credentials with Firebase REST API
         await axios.post(
@@ -86,12 +100,18 @@ router.post("/login/request-otp", async (req, res) => {
             { email, password, returnSecureToken: false }
         );
 
+        // Rate-limit successful OTP dispatches (isolated only for ACTUAL OTP requests)
+        if (!checkOtpRateLimit(`login:${email}`, 3)) {
+            return res.status(429).json({ error: "Too many login attempts. Please wait a moment." });
+        }
+
         // Credentials valid → generate and send OTP
         const otp = generateOtp();
         storeOtp(`login:${email}`, otp, 60);
 
         try {
             await sendOtpEmail(email, otp, "login");
+            logSecurityEventServer(email, "otp_requested", { context: "login", ip }, "info");
         } catch (emailErr) {
             console.error("[Auth] Failed to send login OTP:", emailErr.message);
             return res.status(503).json({ error: "Failed to send OTP email. Please try again." });
@@ -102,8 +122,12 @@ router.post("/login/request-otp", async (req, res) => {
         // Credential verification failed
         const failResult = recordFailedAttempt(email, ip);
 
+        logSecurityEventServer(email, "login_failed", { remainingAttempts: failResult.remainingAttempts, ip }, "warning");
+
         // If account just got locked → send notification email
         if (failResult.locked && failResult.shouldNotify) {
+            logSecurityEventServer(email, "account_locked", { ip, lockDurationMin: failResult.lockDurationMin }, "critical");
+
             const unlockToken = generateUnlockToken(email);
             const unlockUrl = `${BACKEND_URL}/auth/account/unlock/${unlockToken}`;
             try {
@@ -117,7 +141,7 @@ router.post("/login/request-otp", async (req, res) => {
                 console.error("[Auth] Lock notification email failed:", notifyErr.message);
             }
             return res.status(423).json({
-                error: `Account locked due to ${failResult.maxAttempts} failed attempts. Check your email for recovery instructions.`,
+                error: "Your account has been temporarily locked due to multiple failed login attempts",
                 locked: true,
                 remainingMin: failResult.lockDurationMin,
             });
@@ -125,8 +149,8 @@ router.post("/login/request-otp", async (req, res) => {
 
         const msg =
             failResult.remainingAttempts > 0
-                ? `Invalid email or password. ${failResult.remainingAttempts} attempt(s) remaining.`
-                : "Invalid email or password.";
+                ? `Invalid username or password. ${failResult.remainingAttempts} attempts remaining`
+                : "Invalid username or password.";
 
         res.status(401).json({ error: msg, remainingAttempts: failResult.remainingAttempts });
     }
@@ -137,14 +161,17 @@ router.post("/login/request-otp", async (req, res) => {
  * POST /auth/login/verify-otp
  * Body: { email, otp }
  */
-router.post("/login/verify-otp", (req, res) => {
+router.post("/login/verify-otp", async (req, res) => {
     const { email, otp } = req.body;
+    const ip = getClientIp(req);
+
     if (!email || !otp) {
         return res.status(400).json({ error: "Email and OTP are required." });
     }
 
     const result = verifyOtp(`login:${email}`, otp);
     if (!result.valid) {
+        logSecurityEventServer(email, "login_failed", { context: "invalid_otp", ip }, "warning");
         return res.status(401).json({ error: result.reason });
     }
 
@@ -177,6 +204,7 @@ router.post("/forgot-password/request-otp", async (req, res) => {
 
     try {
         await sendOtpEmail(email, otp, "reset");
+        logSecurityEventServer(email, "otp_requested", { context: "forgot_password" }, "info");
         // Generic message to prevent email enumeration
         res.json({ success: true, message: "If the email is registered, an OTP has been sent.", expiresIn: 60 });
     } catch (emailErr) {
@@ -190,8 +218,10 @@ router.post("/forgot-password/request-otp", async (req, res) => {
  * POST /auth/forgot-password/verify-otp
  * Body: { email, otp }
  */
-router.post("/forgot-password/verify-otp", (req, res) => {
+router.post("/forgot-password/verify-otp", async (req, res) => {
     const { email, otp } = req.body;
+    const ip = getClientIp(req);
+
     if (!email || !otp) return res.status(400).json({ error: "Email and OTP are required." });
 
     const result = verifyOtp(`reset:${email}`, otp);
@@ -222,10 +252,10 @@ router.post("/forgot-password/reset", async (req, res) => {
 
     // Try Firebase Admin SDK first (full OTP-based reset)
     try {
-        const admin = require("../firebaseAdmin");
         if (admin) {
             const userRecord = await admin.auth().getUserByEmail(email);
             await admin.auth().updateUser(userRecord.uid, { password: newPassword });
+            logSecurityEventServer(email, "password_reset", { method: "admin_sdk" }, "warning");
             return res.json({ success: true, message: "Password has been reset successfully." });
         }
     } catch (adminErr) {
@@ -240,6 +270,7 @@ router.post("/forgot-password/reset", async (req, res) => {
             `https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${FIREBASE_API_KEY}`,
             { requestType: "PASSWORD_RESET", email }
         );
+        logSecurityEventServer(email, "password_reset", { method: "fallback_link" }, "warning");
         res.json({
             success: true,
             message: "A password reset link has been sent to your email.",

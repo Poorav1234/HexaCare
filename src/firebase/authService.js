@@ -14,14 +14,7 @@ import { auth, googleProvider, IS_DEV } from "./firebaseConfig";
 import { getUserProfile, saveUserProfile } from "./dbService";
 import { logActivity, LOG_ACTIONS } from "./logService";
 
-// Helper to avoid email collisions on the shared fallback database 
-// by transparently aliasing the email for authentication.
-const getDevEmail = (email) => {
-  if (!email || !email.includes('@')) return email;
-  if (email.includes('_hxlocal_')) return email; // already aliased
-  const [local, domain] = email.split('@');
-  return `${local}_hxlocal_@${domain}`;
-};
+// Removed getDevEmail alias logic to ensure consistency with backend validation.
 
 // ---------------------------------------------------------------------------
 // Utility: timeout wrapper to prevent infinite loading if Firebase hangs
@@ -76,8 +69,7 @@ export async function registerWithEmailAndProfile(formData) {
   } = formData;
 
   try {
-    const safeEmail = getDevEmail(email);
-    const cred = await createUserWithEmailAndPassword(auth, safeEmail, password);
+    const cred = await createUserWithEmailAndPassword(auth, email, password);
     const user = cred.user;
 
     if (IS_DEV) console.log("[Auth] User created with email/password. UID:", user.uid);
@@ -122,8 +114,7 @@ export async function registerWithEmailAndProfile(formData) {
  */
 export async function loginWithEmail(email, password) {
   try {
-    const safeEmail = getDevEmail(email);
-    const cred = await signInWithEmailAndPassword(auth, safeEmail, password);
+    const cred = await signInWithEmailAndPassword(auth, email, password);
     const user = cred.user;
 
     if (IS_DEV) console.log("[Auth] User logged in with email/password. UID:", user.uid);
@@ -265,8 +256,7 @@ export async function signInWithGoogle() {
  * resetPassword(email)
  */
 export async function resetPassword(email) {
-  const safeEmail = getDevEmail(email);
-  return withTimeout(() => sendPasswordResetEmail(auth, safeEmail));
+  return withTimeout(() => sendPasswordResetEmail(auth, email));
 }
 
 /**

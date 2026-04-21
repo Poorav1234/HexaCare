@@ -251,8 +251,8 @@ const Reports = ({ user }) => {
                             ) : (
                                 <div className="flex-1 overflow-y-auto space-y-4 pr-2 custom-scrollbar max-h-[600px]">
                                     {reports.map((report) => (
-                                        <div 
-                                            key={report.id} 
+                                        <div
+                                            key={report.id}
                                             onClick={() => openIPFSLink(report.fileUrl)}
                                             className={`bg-slate-900/50 border border-slate-700/80 rounded-xl p-4 transition-colors ${report.fileUrl ? 'cursor-pointer hover:border-neonCyan hover:shadow-[0_0_15px_rgba(0,243,255,0.1)]' : 'hover:border-neonCyan/50'}`}
                                         >
@@ -306,3 +306,4 @@ const Reports = ({ user }) => {
 };
 
 export default Reports;
+// hey

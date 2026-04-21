@@ -114,7 +114,9 @@ function recordFailedAttempt(email, ip) {
 
     // Lock IP after double threshold (attack from single IP)
     if (ipd.attempts.length >= MAX_FAILED_ATTEMPTS * 2 && !ipd.lockedUntil) {
-        ipd.lockedUntil = now + LOCK_DURATION_MS;
+        // Layer 3: Combined Intelligence - increase severity if both are locked
+        const severityMultiplier = locked ? 2 : 1;
+        ipd.lockedUntil = now + (LOCK_DURATION_MS * severityMultiplier);
     }
 
     return {
