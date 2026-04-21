@@ -43,6 +43,8 @@ export async function saveUserProfile(uid, profileData, authProvider) {
         ...existingProfile, // preserve existing data
         fullName: profileData.fullName || existingProfile?.fullName || "",
         email: profileData.email || existingProfile?.email || "",
+        role: profileData.role || existingProfile?.role || "user",
+        isActive: existingProfile?.isActive !== undefined ? existingProfile.isActive : true,
         phoneNumber: profileData.phoneNumber || existingProfile?.phoneNumber || "",
         gender: profileData.gender || existingProfile?.gender || "",
         dateOfBirth: profileData.dateOfBirth || existingProfile?.dateOfBirth || "",

@@ -12,6 +12,7 @@ import {
 } from "firebase/auth";
 import { auth, googleProvider, IS_DEV } from "./firebaseConfig";
 import { getUserProfile, saveUserProfile } from "./dbService";
+import { logActivity, LOG_ACTIONS } from "./logService";
 
 // ---------------------------------------------------------------------------
 // Utility: timeout wrapper to prevent infinite loading if Firebase hangs
@@ -89,6 +90,9 @@ export async function registerWithEmailAndProfile(formData) {
     // Sign out to prevent auto-login
     await signOut(auth);
 
+    // Log registration event
+    logActivity({ userId: user.uid, email, action: LOG_ACTIONS.USER_REGISTER });
+
     return { user, profile };
   } catch (error) {
     if (IS_DEV) console.error("[Auth] registerWithEmailAndProfile error:", error);
@@ -126,6 +130,9 @@ export async function loginWithEmail(email, password) {
     const needsProfileCompletion = !profile.profileCompleted;
 
     if (IS_DEV) console.log("[RTDB] User profile on login:", user.uid, profile);
+
+    // Log the login event for admin activity tracking
+    logActivity({ userId: user.uid, email: user.email, action: LOG_ACTIONS.USER_LOGIN });
 
     return { user, profile, needsProfileCompletion };
   } catch (error) {

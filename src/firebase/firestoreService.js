@@ -1,5 +1,6 @@
 import { db } from "./firebaseConfig";
 import { collection, addDoc, getDocs, query, where, orderBy, serverTimestamp } from "firebase/firestore";
+import { logActivity, LOG_ACTIONS } from "./logService";
 
 // Simulated blockchain transaction generator
 const generateTxHash = () => {
@@ -28,6 +29,7 @@ export const saveReportToBlockchain = async (user, reportData, realTxHash = null
                 addDoc(collection(db, "reports"), payload),
                 new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 5000))
             ]);
+            logActivity({ userId: user.uid, email: user.email, action: LOG_ACTIONS.REPORT_SUBMITTED, metadata: { reportId: docRef.id } });
             return { success: true, txHash, id: docRef.id };
         } catch (error) {
             console.warn("[Firebase] Firestore write denied. Emulating locally.");
@@ -88,6 +90,7 @@ export const savePrediction = async (user, type, inputs, riskLevel, score) => {
             addDoc(collection(db, "predictions"), payload),
             new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 5000))
         ]);
+        logActivity({ userId: user.uid, email: user.email, action: LOG_ACTIONS.PREDICTION_RUN, metadata: { type, riskLevel } });
         return { success: true, id: docRef.id };
     } catch (error) {
          console.warn("[Firebase] Firestore write denied. Emulating locally.");

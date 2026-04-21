@@ -5,6 +5,7 @@ import {
     User,
     LogOut,
     ChevronDown,
+    Shield,
 } from "lucide-react";
 import { logoutUser } from "../firebase/authService";
 
@@ -22,10 +23,15 @@ const NavBar = ({ user, profileData }) => {
         }
     };
 
+    const isAdminUser = user?.role === "admin" || user?.role === "super_admin";
+
     const navLinks = [
         { name: "Dashboard", path: "/dashboard" },
         { name: "Predict", path: "/predict" },
         { name: "Blockchain Reports", path: "/reports" },
+        ...(isAdminUser
+            ? [{ name: "Admin", path: "/admin", icon: Shield }]
+            : []),
     ];
 
     return (
@@ -54,6 +60,7 @@ const NavBar = ({ user, profileData }) => {
                                             : "text-slate-300 hover:text-white hover:bg-slate-800/30"
                                         }`}
                                 >
+                                    {link.icon && <link.icon className="w-3.5 h-3.5 mr-1" />}
                                     {link.name}
                                 </Link>
                             ))}

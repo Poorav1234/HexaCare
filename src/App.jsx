@@ -5,9 +5,10 @@ import {
   Route,
   Navigate,
 } from "react-router-dom";
-import { onAuthStateChanged } from "firebase/auth";
+import { onAuthStateChanged, signOut } from "firebase/auth";
 import { auth } from "./firebase/firebaseConfig";
 import { getUserProfile } from "./firebase/dbService";
+import { initializeSuperAdmin } from "./firebase/adminService";
 
 import Login from "./Pages/Login";
 import Register from "./Pages/Register";
@@ -16,6 +17,12 @@ import Dashboard from "./Pages/Dashboard";
 import Reports from "./Pages/Reports";
 import PredictPages from "./Pages/PredictPages";
 import Profile from "./Pages/Profile";
+
+// Admin module
+import AdminRoute from "./admin/AdminRoute";
+import AdminDashboard from "./admin/AdminDashboard";
+import AdminManagement from "./admin/AdminManagement";
+import AdminLogs from "./admin/AdminLogs";
 
 const IS_DEV =
   import.meta.env.MODE === "development" ||
@@ -53,13 +60,31 @@ function App() {
           const userProfile = await fetchDocWithTimeout();
           if (userProfile) {
             const profileCompleted = !!userProfile.profileCompleted;
-            setUser({ ...currentUser, profileCompleted });
+            const role = userProfile.role || "user";
+            const isActive = userProfile.isActive !== false;
+
+            // Block deactivated admins
+            if ((role === "admin" || role === "super_admin") && !isActive) {
+              await signOut(auth);
+              setUser(null);
+              setLoading(false);
+              return;
+            }
+
+            // Initialize super admin role if applicable
+            await initializeSuperAdmin(currentUser.uid, currentUser.email);
+            // Re-read role in case it was just set
+            const finalRole = (await getUserProfile(currentUser.uid))?.role || role;
+
+            setUser({ ...currentUser, profileCompleted, role: finalRole, isActive });
             setDevState({
               userDocExists: true,
               profileCompleted,
             });
           } else {
-            setUser({ ...currentUser, profileCompleted: false });
+            // No profile yet — check for super admin init
+            await initializeSuperAdmin(currentUser.uid, currentUser.email);
+            setUser({ ...currentUser, profileCompleted: false, role: "user", isActive: true });
             setDevState({
               userDocExists: false,
               profileCompleted: false,
@@ -68,7 +93,7 @@ function App() {
         } catch (error) {
           // eslint-disable-next-line no-console
           console.error("[App] Error fetching user data:", error);
-          setUser({ ...currentUser, profileCompleted: false });
+          setUser({ ...currentUser, profileCompleted: false, role: "user", isActive: true });
           setDevState({
             userDocExists: false,
             profileCompleted: false,
@@ -95,6 +120,9 @@ function App() {
     );
   }
 
+  // Admins go directly to admin dashboard
+  const homeRoute = (user?.role === "super_admin" || user?.role === "admin") ? "/admin" : "/dashboard";
+
   return (
     <Router>
       <div className="bg-futuristic text-slate-100 min-h-screen font-sans">
@@ -104,7 +132,7 @@ function App() {
               path="/"
               element={
                 user && user.profileCompleted ? (
-                  <Navigate to="/dashboard" />
+                  <Navigate to={homeRoute} />
                 ) : (
                   <Navigate to="/login" />
                 )
@@ -114,7 +142,7 @@ function App() {
             <Route
               path="/login"
               element={
-                user && user.profileCompleted ? <Navigate to="/dashboard" /> : <Login />
+                user && user.profileCompleted ? <Navigate to={homeRoute} /> : <Login />
               }
             />
 
@@ -122,7 +150,7 @@ function App() {
               path="/register"
               element={
                 user && user.profileCompleted ? (
-                  <Navigate to="/dashboard" />
+                  <Navigate to={homeRoute} />
                 ) : (
                   <Register />
                 )
@@ -181,6 +209,32 @@ function App() {
                 ) : (
                   <Navigate to="/login" />
                 )
+              }
+            />
+
+            {/* ── Admin Routes ─────────────────────────────────────── */}
+            <Route
+              path="/admin"
+              element={
+                <AdminRoute user={user}>
+                  <AdminDashboard user={user} />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/management"
+              element={
+                <AdminRoute user={user} requireSuperAdmin>
+                  <AdminManagement user={user} />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/logs"
+              element={
+                <AdminRoute user={user}>
+                  <AdminLogs user={user} />
+                </AdminRoute>
               }
             />
           </Routes>

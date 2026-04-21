@@ -6,6 +6,7 @@ import {
   signInWithGoogle,
   resetPassword,
 } from "../firebase/authService";
+import { getUserRole } from "../firebase/adminService";
 import AuthLayout from "../Components/AuthLayout";
 import Toast from "../Components/Toast";
 
@@ -46,9 +47,10 @@ const Login = () => {
     setLoading(true);
     setServerError("");
     try {
-      await loginUser(formData.email, formData.password);
-      // App.jsx routing will automatically redirect based on profileCompleted
-      navigate("/dashboard");
+      const result = await loginUser(formData.email, formData.password);
+      // Check role to redirect admins to admin dashboard
+      const role = await getUserRole(result.user.uid);
+      navigate((role === "admin" || role === "super_admin") ? "/admin" : "/dashboard");
     } catch (error) {
       if (error.message === "PROFILE_INCOMPLETE") {
         navigate("/complete-profile");
@@ -68,7 +70,8 @@ const Login = () => {
       if (isNewOrIncomplete) {
         navigate("/complete-profile");
       } else {
-        navigate("/dashboard");
+        const role = await getUserRole(result.user?.uid || "");
+        navigate((role === "admin" || role === "super_admin") ? "/admin" : "/dashboard");
       }
     } catch (error) {
       setServerError(error.message || "Google sign-in failed");
