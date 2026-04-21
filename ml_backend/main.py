@@ -77,18 +77,34 @@ def predict_risk(disease_type: str, data: Dict[str, Any]):
         if "gender" in data:
             if data["gender"] == "Male" and "gender_Male" in expected_features:
                 df_data["gender_Male"] = 1.0
+            elif data["gender"] == "Other" and "gender_Other" in expected_features:
+                df_data["gender_Other"] = 1.0
 
         if "smoking_history" in data:
             col = f"smoking_history_{data['smoking_history']}"
             if col in expected_features:
-                df_data[col] = 1.0            
+                df_data[col] = 1.0
+
+    # Lung cancer: all features are numeric (1=No, 2=Yes except GENDER=1/0, AGE=integer)
+    # No encoding needed — values come directly from frontend selects.
+    if disease_type == "lung":
+        for key, value in data.items():
+            if key in df_data:
+                df_data[key] = float(value)
+
     # Initialize dataframe natively resolving mapping bounds
     input_df = pd.DataFrame([df_data])[expected_features]
     
     # 3. Dynamic Scaling 
     try:
         if hasattr(scaler, "transform"):
-            scaled_input = scaler.transform(input_df)
+            if hasattr(scaler, "feature_names_in_"):
+                scaled_feats = scaler.transform(input_df[scaler.feature_names_in_])
+                input_df = input_df.copy()
+                input_df[scaler.feature_names_in_] = scaled_feats
+                scaled_input = input_df
+            else:
+                scaled_input = scaler.transform(input_df)
         else:
             scaled_input = input_df
     except Exception as e:

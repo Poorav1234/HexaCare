@@ -102,10 +102,10 @@ const Dashboard = ({ user }) => {
             path: "/predict/diabetes",
         },
         {
-            title: "Cancer Risk Inference",
-            description: "Process lifestyle factors for oncology insights.",
+            title: "Lung Cancer Risk Inference",
+            description: "Assess lung cancer risk using lifestyle and symptom factors.",
             icon: Activity,
-            path: "/predict/cancer",
+            path: "/predict/lung",
         },
         {
             title: "Overall Health Inference",

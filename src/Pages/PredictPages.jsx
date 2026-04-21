@@ -39,13 +39,24 @@ const configs = {
             ] },
         ]
     },
-    cancer: {
-        title: "Cancer",
+    lung: {
+        title: "Lung Cancer Risk",
         inputs: [
-            { name: "age", label: "Age", type: "number", placeholder: "e.g. 45" },
-            { name: "smokingHistory", label: "Smoking History", type: "checkbox" },
-            { name: "radiationExposure", label: "Radiation Exposure", type: "checkbox" },
-            { name: "familyHistory", label: "Family History", type: "checkbox" },
+            { name: "GENDER", label: "Gender", type: "select", options: [{label: "Male", value: 1}, {label: "Female", value: 0}] },
+            { name: "AGE", label: "Age", type: "number", placeholder: "e.g. 60", min: 1, max: 120 },
+            { name: "SMOKING", label: "Do you smoke?", type: "select", options: [{label: "No", value: 1}, {label: "Yes", value: 2}] },
+            { name: "YELLOW_FINGERS", label: "Yellow Fingers?", type: "select", options: [{label: "No", value: 1}, {label: "Yes", value: 2}] },
+            { name: "ANXIETY", label: "Do you experience anxiety?", type: "select", options: [{label: "No", value: 1}, {label: "Yes", value: 2}] },
+            { name: "PEER_PRESSURE", label: "Do you experience peer pressure?", type: "select", options: [{label: "No", value: 1}, {label: "Yes", value: 2}] },
+            { name: "CHRONIC DISEASE", label: "Do you have a chronic disease?", type: "select", options: [{label: "No", value: 1}, {label: "Yes", value: 2}] },
+            { name: "FATIGUE ", label: "Do you experience fatigue?", type: "select", options: [{label: "No", value: 1}, {label: "Yes", value: 2}] },
+            { name: "ALLERGY ", label: "Do you have an allergy?", type: "select", options: [{label: "No", value: 1}, {label: "Yes", value: 2}] },
+            { name: "WHEEZING", label: "Do you experience wheezing?", type: "select", options: [{label: "No", value: 1}, {label: "Yes", value: 2}] },
+            { name: "ALCOHOL CONSUMING", label: "Do you consume alcohol?", type: "select", options: [{label: "No", value: 1}, {label: "Yes", value: 2}] },
+            { name: "COUGHING", label: "Do you experience coughing?", type: "select", options: [{label: "No", value: 1}, {label: "Yes", value: 2}] },
+            { name: "SHORTNESS OF BREATH", label: "Shortness of breath?", type: "select", options: [{label: "No", value: 1}, {label: "Yes", value: 2}] },
+            { name: "SWALLOWING DIFFICULTY", label: "Swallowing Difficulty?", type: "select", options: [{label: "No", value: 1}, {label: "Yes", value: 2}] },
+            { name: "CHEST PAIN", label: "Do you have chest pain?", type: "select", options: [{label: "No", value: 1}, {label: "Yes", value: 2}] },
         ]
     },
     overall: {
