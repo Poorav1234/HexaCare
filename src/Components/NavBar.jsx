@@ -6,6 +6,8 @@ import {
     LogOut,
     ChevronDown,
     Shield,
+    Info,
+    Phone,
 } from "lucide-react";
 import { logoutUser } from "../firebase/authService";
 
@@ -26,9 +28,11 @@ const NavBar = ({ user, profileData }) => {
     const isAdminUser = user?.role === "admin" || user?.role === "super_admin";
 
     const navLinks = [
-        { name: "Dashboard", path: "/dashboard" },
-        { name: "Predict", path: "/predict" },
+        { name: "Dashboard",          path: "/dashboard" },
+        { name: "Predict",            path: "/predict" },
         { name: "Blockchain Reports", path: "/reports" },
+        { name: "About",              path: "/about" },
+        { name: "Contact",            path: "/contact" },
         ...(isAdminUser
             ? [{ name: "Admin", path: "/admin", icon: Shield }]
             : []),
@@ -51,19 +55,23 @@ const NavBar = ({ user, profileData }) => {
                     {/* Links */}
                     <div className="hidden md:block flex-1">
                         <div className="ml-10 flex items-baseline space-x-4">
-                            {navLinks.map((link) => (
-                                <Link
-                                    key={link.name}
-                                    to={link.path}
-                                    className={`px-3 py-2 rounded-md text-sm font-medium transition-all ${location.pathname === link.path || (link.path !== '/dashboard' && location.pathname.startsWith(link.path))
-                                            ? "text-neonCyan bg-slate-800/50"
-                                            : "text-slate-300 hover:text-white hover:bg-slate-800/30"
+                            {navLinks.map((link) => {
+                                const Icon = link.icon;
+                                return (
+                                    <Link
+                                        key={link.name}
+                                        to={link.path}
+                                        className={`inline-flex items-center gap-1 px-3 py-2 rounded-md text-sm font-medium transition-all ${
+                                            location.pathname === link.path || (link.path !== '/dashboard' && location.pathname.startsWith(link.path))
+                                                ? "text-neonCyan bg-slate-800/50"
+                                                : "text-slate-300 hover:text-white hover:bg-slate-800/30"
                                         }`}
-                                >
-                                    {link.icon && <link.icon className="w-3.5 h-3.5 mr-1" />}
-                                    {link.name}
-                                </Link>
-                            ))}
+                                    >
+                                        {Icon && <Icon className="w-3.5 h-3.5" />}
+                                        {link.name}
+                                    </Link>
+                                );
+                            })}
                         </div>
                     </div>
 
@@ -103,6 +111,22 @@ const NavBar = ({ user, profileData }) => {
                                             >
                                                 <User className="mr-3 h-4 w-4" />
                                                 Profile Settings
+                                            </Link>
+                                            <Link
+                                                to="/about"
+                                                onClick={() => setDropdownOpen(false)}
+                                                className="flex items-center px-4 py-3 text-sm text-slate-300 hover:bg-slate-800 hover:text-neonCyan transition-colors"
+                                            >
+                                                <Info className="mr-3 h-4 w-4" />
+                                                About HexaCare
+                                            </Link>
+                                            <Link
+                                                to="/contact"
+                                                onClick={() => setDropdownOpen(false)}
+                                                className="flex items-center px-4 py-3 text-sm text-slate-300 hover:bg-slate-800 hover:text-neonCyan transition-colors"
+                                            >
+                                                <Phone className="mr-3 h-4 w-4" />
+                                                Contact Us
                                             </Link>
                                             <button
                                                 onClick={() => {

@@ -133,13 +133,7 @@ const Dashboard = ({ user }) => {
                                     Your health dashboard is ready. All features are active and running.
                                 </p>
                             </div>
-                            <div className="hidden md:block text-right">
-                                <p className="text-xs text-slate-500 uppercase tracking-widest mb-1">Status</p>
-                                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded bg-neonGreen/10 border border-neonGreen/20 text-neonGreen text-sm font-medium">
-                                    <span className="w-2 h-2 rounded-full bg-neonGreen animate-pulse"></span>
-                                    Healthy
-                                </div>
-                            </div>
+
                         </div>
                     </section>
 

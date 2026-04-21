@@ -16,8 +16,11 @@ import ForgotPassword from "./Pages/ForgotPassword";
 import CompleteProfile from "./Pages/CompleteProfile";
 import Dashboard from "./Pages/Dashboard";
 import Reports from "./Pages/Reports";
+import PredictHub from "./Pages/PredictHub";
 import PredictPages from "./Pages/PredictPages";
 import Profile from "./Pages/Profile";
+import About from "./Pages/About";
+import Contact from "./Pages/Contact";
 
 // Admin module
 import AdminRoute from "./admin/AdminRoute";
@@ -206,6 +209,17 @@ function App() {
             />
 
             <Route
+              path="/predict"
+              element={
+                user && user.profileCompleted ? (
+                  <PredictHub user={user} />
+                ) : (
+                  <Navigate to="/login" />
+                )
+              }
+            />
+
+            <Route
               path="/predict/:type"
               element={
                 user && user.profileCompleted ? (
@@ -214,6 +228,16 @@ function App() {
                   <Navigate to="/login" />
                 )
               }
+            />
+
+            <Route
+              path="/about"
+              element={user && user.profileCompleted ? <About user={user} /> : <Navigate to="/login" />}
+            />
+
+            <Route
+              path="/contact"
+              element={user && user.profileCompleted ? <Contact user={user} /> : <Navigate to="/login" />}
             />
 
             <Route
