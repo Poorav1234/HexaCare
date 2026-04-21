@@ -1,14 +1,15 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Mail, Lock, HeartPulse, Hexagon, Loader2 } from "lucide-react";
+import { Mail, Lock, HeartPulse, Loader2, ShieldAlert } from "lucide-react";
 import {
   loginUser,
   signInWithGoogle,
-  resetPassword,
 } from "../firebase/authService";
 import { getUserRole } from "../firebase/adminService";
+import { requestLoginOtp, verifyLoginOtp, requestAccountUnlock } from "../services/securityApi";
 import AuthLayout from "../Components/AuthLayout";
 import Toast from "../Components/Toast";
+import OtpInput from "../Components/OtpInput";
 
 const Login = () => {
   const [formData, setFormData] = useState({ email: "", password: "" });
@@ -18,6 +19,15 @@ const Login = () => {
   const [serverError, setServerError] = useState("");
   const [resetMessage, setResetMessage] = useState("");
   const navigate = useNavigate();
+
+  // ── OTP State ─────────────────────────────────────────────────────────────
+  const [otpStep, setOtpStep] = useState(false);
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [otpError, setOtpError] = useState("");
+
+  // ── Lock State ────────────────────────────────────────────────────────────
+  const [accountLocked, setAccountLocked] = useState(false);
+  const [lockInfo, setLockInfo] = useState(null);
 
   const validate = () => {
     const newErrors = {};
@@ -40,28 +50,82 @@ const Login = () => {
     }
   };
 
+  // ── Email+Password Login → OTP Flow ───────────────────────────────────────
   const handleManualLogin = async (e) => {
     e.preventDefault();
     if (!validate()) return;
 
     setLoading(true);
     setServerError("");
+    setAccountLocked(false);
+
     try {
-      const result = await loginUser(formData.email, formData.password);
-      // Check role to redirect admins to admin dashboard
-      const role = await getUserRole(result.user.uid);
-      navigate((role === "admin" || role === "super_admin") ? "/admin" : "/dashboard");
+      // Step 1: Verify credentials + send OTP via backend
+      await requestLoginOtp(formData.email, formData.password);
+      // Credentials valid → show OTP input
+      setOtpStep(true);
+      setOtpError("");
     } catch (error) {
-      if (error.message === "PROFILE_INCOMPLETE") {
-        navigate("/complete-profile");
+      if (error.status === 423) {
+        setAccountLocked(true);
+        setLockInfo(error);
+        setServerError(error.error || "Account is temporarily locked.");
+      } else if (error.status === 429) {
+        setServerError(error.error || "Too many requests. Please wait.");
       } else {
-        setServerError(error.message || "Failed to login. Please check your network connection.");
+        setServerError(error.error || "Invalid email or password.");
       }
     } finally {
       setLoading(false);
     }
   };
 
+  // ── OTP Verification ─────────────────────────────────────────────────────
+  const handleOtpComplete = async (otp) => {
+    setOtpLoading(true);
+    setOtpError("");
+
+    try {
+      // Step 2: Verify OTP with backend
+      await verifyLoginOtp(formData.email, otp);
+
+      // Step 3: OTP verified → do the actual Firebase sign-in
+      const result = await loginUser(formData.email, formData.password);
+      // Check role to redirect admins to admin dashboard
+      const role = await getUserRole(result.user?.uid || result.uid);
+      navigate((role === "admin" || role === "super_admin") ? "/admin" : "/dashboard");
+    } catch (error) {
+      if (error.message === "PROFILE_INCOMPLETE") {
+        navigate("/complete-profile");
+      } else {
+        setOtpError(error.error || error.message || "Verification failed. Please try again.");
+      }
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const handleOtpResend = async () => {
+    try {
+      await requestLoginOtp(formData.email, formData.password);
+    } catch (error) {
+      setOtpError(error.error || "Failed to resend OTP.");
+      throw error;
+    }
+  };
+
+  // ── Account Unlock ────────────────────────────────────────────────────────
+  const handleUnlockRequest = async () => {
+    try {
+      await requestAccountUnlock(formData.email);
+      setServerError("");
+      setResetMessage("Unlock instructions sent to your email.");
+    } catch (error) {
+      setServerError(error.error || "Failed to send unlock request.");
+    }
+  };
+
+  // ── Google Login (unchanged — no OTP for Google) ──────────────────────────
   const handleGoogleLogin = async () => {
     setGoogleLoading(true);
     setServerError("");
@@ -70,8 +134,9 @@ const Login = () => {
       if (isNewOrIncomplete) {
         navigate("/complete-profile");
       } else {
-        const role = await getUserRole(result.user?.uid || "");
-        navigate((role === "admin" || role === "super_admin") ? "/admin" : "/dashboard");
+        // Google sign-in doesn't return result in this scope,
+        // App.jsx handles role-based redirect via onAuthStateChanged
+        navigate("/dashboard");
       }
     } catch (error) {
       setServerError(error.message || "Google sign-in failed");
@@ -80,20 +145,49 @@ const Login = () => {
     }
   };
 
-  const handleForgotPassword = async () => {
-    if (!formData.email) {
-      setErrors({ ...errors, email: "Please enter your email first" });
-      return;
-    }
-    try {
-      await resetPassword(formData.email);
-      setResetMessage("Password reset email sent!");
-      setTimeout(() => setResetMessage(""), 5000);
-    } catch (error) {
-      setServerError(error.message || "Failed to send reset email");
-    }
+  // ── Forgot Password → navigate to dedicated page ─────────────────────────
+  const handleForgotPassword = () => {
+    navigate("/forgot-password", { state: { email: formData.email } });
   };
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // RENDER: OTP VERIFICATION SCREEN
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (otpStep) {
+    return (
+      <AuthLayout title="OTP Verification" subtitle="One more step to secure your login.">
+        <Toast message={otpError} type="error" onClose={() => setOtpError("")} />
+        <div className="glass-card w-full max-w-2xl mx-auto p-8 rounded-2xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-24 h-24 bg-neonCyan/20 blur-3xl rounded-full" />
+          <div className="absolute bottom-0 left-0 w-32 h-32 bg-neonPurple/20 blur-3xl rounded-full" />
+
+          <div className="relative z-10">
+            <OtpInput
+              length={6}
+              email={formData.email}
+              onComplete={handleOtpComplete}
+              onResend={handleOtpResend}
+              expiresIn={60}
+              loading={otpLoading}
+              error={otpError}
+            />
+
+            <button
+              type="button"
+              onClick={() => { setOtpStep(false); setOtpError(""); }}
+              className="mt-6 w-full text-center text-xs text-slate-500 hover:text-neonCyan transition-colors"
+            >
+              ← Back to Login
+            </button>
+          </div>
+        </div>
+      </AuthLayout>
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // RENDER: MAIN LOGIN FORM
+  // ═══════════════════════════════════════════════════════════════════════════
   return (
     <AuthLayout
       title="Sign In to HexaCare"
@@ -123,6 +217,28 @@ const Login = () => {
             Personal Health Assistant
           </p>
         </div>
+
+        {/* ── Account Locked Banner ──────────────────────────────────────── */}
+        {accountLocked && (
+          <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl">
+            <div className="flex items-start gap-3">
+              <ShieldAlert className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm text-red-400 font-medium">Account Temporarily Locked</p>
+                <p className="text-xs text-slate-400 mt-1">
+                  {lockInfo?.error || `Multiple failed login attempts detected. Try again in ${lockInfo?.remainingMin || 15} minutes.`}
+                </p>
+                <button
+                  type="button"
+                  onClick={handleUnlockRequest}
+                  className="mt-2 text-xs text-neonCyan hover:text-white transition-colors underline"
+                >
+                  Send unlock instructions to my email
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <form onSubmit={handleManualLogin} className="space-y-5">
           <div>

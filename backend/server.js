@@ -1,7 +1,6 @@
+require("dotenv").config();
 const express = require("express");
 const multer = require("multer");
-const axios = require("axios");
-const FormData = require("form-data");
 const fs = require("fs");
 const cors = require("cors");
 const nodemailer = require("nodemailer");
@@ -10,6 +9,10 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 const upload = multer({ dest: "uploads/" });
+
+// ── Auth Security Routes ─────────────────────────────────────────────────────
+const authRoutes = require("./routes/authRoutes");
+app.use("/auth", authRoutes);
 
 // 🔑 Add your keys
 const PINATA_API_KEY = "49775d0589707bce94f1";
@@ -21,31 +24,47 @@ const CONTRACT_ADDRESS = "0xe8e112009bf378220FAeDBf8BDDe368f827d4cCA";
 const PINATA_SECRET_API_KEY = "0cf2ed30cf8b6a0c354271043a9d67f69d5569806b5db6b689ff58bf45e076ba";
 
 app.post("/upload", upload.single("file"), async (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ error: "No file uploaded" });
+    }
+
     try {
-        const data = new FormData();
-        data.append("file", fs.createReadStream(req.file.path), {
-            filename: req.file.originalname,
-            contentType: req.file.mimetype,
+        // Read the temp file as a buffer
+        const fileBuffer = fs.readFileSync(req.file.path);
+        const blob = new Blob([fileBuffer], { type: req.file.mimetype });
+
+        // Use native FormData + fetch (Node.js v18+ built-in, works on v24)
+        const formData = new FormData();
+        formData.append("file", blob, req.file.originalname);
+
+        const response = await fetch("https://api.pinata.cloud/pinning/pinFileToIPFS", {
+            method: "POST",
+            headers: {
+                pinata_api_key: PINATA_API_KEY,
+                pinata_secret_api_key: PINATA_SECRET_API_KEY,
+            },
+            body: formData,
         });
 
-        const response = await axios.post(
-            "https://api.pinata.cloud/pinning/pinFileToIPFS",
-            data,
-            {
-                headers: {
-                    ...data.getHeaders(),
-                    pinata_api_key: PINATA_API_KEY,
-                    pinata_secret_api_key: PINATA_SECRET_API_KEY
-                }
-            }
-        );
+        // Clean up temp file
+        fs.unlink(req.file.path, () => {});
 
-        const cid = response.data.IpfsHash;
+        if (!response.ok) {
+            const errText = await response.text();
+            console.error("[Pinata] Error response:", errText);
+            return res.status(502).json({ error: `Pinata error: ${response.status} – ${errText}` });
+        }
+
+        const data = await response.json();
+        const cid = data.IpfsHash;
+        console.log("[Pinata] Pinned successfully. CID:", cid);
 
         res.json({ cid });
 
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        console.error("[Upload] Error:", err.message);
+        if (req.file && req.file.path) fs.unlink(req.file.path, () => {});
+        res.status(500).json({ error: err.message || "Upload to IPFS failed" });
     }
 });
 

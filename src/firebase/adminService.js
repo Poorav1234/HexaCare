@@ -230,11 +230,23 @@ export async function createAdminUser({
     } catch (error) {
         if (secondaryApp) {
             try {
+                // If the user was created in Auth but a later step failed,
+                // delete the orphaned Auth user so re-creation is possible.
+                const secondaryAuth = getAuth(secondaryApp);
+                if (secondaryAuth.currentUser) {
+                    await secondaryAuth.currentUser.delete();
+                }
+            } catch {
+                /* best-effort cleanup */
+            }
+            try {
                 await deleteApp(secondaryApp);
             } catch {
                 /* noop */
             }
         }
+
+        console.error("[Admin] CREATE FAILED — code:", error.code, "| message:", error.message);
 
         if (error.code === "auth/email-already-in-use") {
             throw new Error("An account with this email already exists.");
