@@ -1,7 +1,7 @@
 // src/admin/AdminDashboard.jsx
-// System-wide statistics dashboard for admins.
-// Shows stat cards, charts (user roles, report types, registration trend),
-// recent users and recent reports.
+// Comprehensive system overview with advanced analytics.
+// Pie chart (model usage), bar chart (model frequency), line chart (activity trend).
+// Shows most/least used model. Privacy-enforced — no user-specific data.
 
 import React, { useEffect, useState, useMemo } from "react";
 import {
@@ -16,13 +16,21 @@ import {
     RefreshCw,
     BarChart3,
     PieChart,
-    Clock,
+    LineChart,
     ArrowUpRight,
+    ArrowDownRight,
+    Zap,
+    Target,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import AdminLayout from "./AdminLayout";
-import { getSystemStats, getAllUsers, getAllReportsAdmin } from "../firebase/adminService";
+import {
+    getSystemStats,
+    getModelUsageAnalytics,
+    getActivityTimeline,
+} from "../firebase/adminService";
 
+// ── Stat Card ────────────────────────────────────────────────────────────────
 const StatCard = ({ title, value, icon: Icon, accent, subtitle }) => (
     <div className="glass-card rounded-2xl p-6 relative overflow-hidden group hover:border-slate-600 transition-all duration-300">
         <div
@@ -51,7 +59,7 @@ const StatCard = ({ title, value, icon: Icon, accent, subtitle }) => (
 const MiniBarChart = ({ data, colors }) => {
     const max = Math.max(...data.map((d) => d.value), 1);
     return (
-        <div className="flex items-end gap-2 h-32">
+        <div className="flex items-end gap-2 h-36">
             {data.map((d, i) => (
                 <div key={d.label} className="flex-1 flex flex-col items-center gap-1.5">
                     <span className="text-[10px] text-slate-400 font-bold">{d.value}</span>
@@ -66,8 +74,8 @@ const MiniBarChart = ({ data, colors }) => {
     );
 };
 
-// ── Donut Chart (pure SVG) ───────────────────────────────────────────────────
-const DonutChart = ({ data, colors, size = 120 }) => {
+// ── Donut Chart (Pie Chart - pure SVG) ───────────────────────────────────────
+const DonutChart = ({ data, colors, size = 130 }) => {
     const total = data.reduce((s, d) => s + d.value, 0) || 1;
     const radius = 42;
     const circumference = 2 * Math.PI * radius;
@@ -114,40 +122,106 @@ const DonutChart = ({ data, colors, size = 120 }) => {
     );
 };
 
-// ── Registration Trend (sparkline) ───────────────────────────────────────────
-const RegistrationTrend = ({ users }) => {
-    const last7 = useMemo(() => {
-        const days = [];
-        for (let i = 6; i >= 0; i--) {
-            const d = new Date();
-            d.setDate(d.getDate() - i);
-            d.setHours(0, 0, 0, 0);
-            const nextDay = new Date(d);
-            nextDay.setDate(nextDay.getDate() + 1);
-            const count = users.filter((u) => {
-                const ct = u.createdAt || 0;
-                return ct >= d.getTime() && ct < nextDay.getTime();
-            }).length;
-            days.push({
-                label: d.toLocaleDateString("en-IN", { weekday: "short" }),
-                value: count,
-            });
-        }
-        return days;
-    }, [users]);
+// ── Line Chart (SVG Sparkline with Area Fill) ────────────────────────────────
+const ActivityLineChart = ({ timeline }) => {
+    if (!timeline || timeline.length === 0) return <div className="h-44 flex items-center justify-center text-xs text-slate-600">No data</div>;
+
+    // Show last 14 days for clarity
+    const data = timeline.slice(-14);
+    const maxVal = Math.max(...data.map(d => d.logins + d.reports + d.predictions), 1);
+
+    const width = 500;
+    const height = 160;
+    const padding = { top: 10, right: 10, bottom: 30, left: 10 };
+    const chartW = width - padding.left - padding.right;
+    const chartH = height - padding.top - padding.bottom;
+
+    const getPoints = (key) => {
+        return data.map((d, i) => {
+            const x = padding.left + (i / (data.length - 1 || 1)) * chartW;
+            const y = padding.top + chartH - (d[key] / maxVal) * chartH;
+            return `${x},${y}`;
+        });
+    };
+
+    const combinedPoints = data.map((d, i) => {
+        const x = padding.left + (i / (data.length - 1 || 1)) * chartW;
+        const totalVal = d.logins + d.reports + d.predictions;
+        const y = padding.top + chartH - (totalVal / maxVal) * chartH;
+        return { x, y };
+    });
+
+    const linePath = combinedPoints.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
+    const areaPath = `${linePath} L ${combinedPoints[combinedPoints.length - 1].x} ${padding.top + chartH} L ${combinedPoints[0].x} ${padding.top + chartH} Z`;
 
     return (
-        <MiniBarChart
-            data={last7}
-            colors={["bg-neonCyan/80", "bg-neonCyan/60", "bg-neonCyan/70", "bg-neonCyan/50", "bg-neonCyan/80", "bg-neonCyan/60", "bg-neonCyan/70"]}
-        />
+        <div className="w-full overflow-hidden">
+            <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-44">
+                <defs>
+                    <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#0ea5e9" stopOpacity="0.3" />
+                        <stop offset="100%" stopColor="#0ea5e9" stopOpacity="0" />
+                    </linearGradient>
+                </defs>
+
+                {/* Grid lines */}
+                {[0.25, 0.5, 0.75].map(pct => (
+                    <line
+                        key={pct}
+                        x1={padding.left} y1={padding.top + chartH * (1 - pct)}
+                        x2={padding.left + chartW} y2={padding.top + chartH * (1 - pct)}
+                        stroke="#1e293b" strokeWidth="1" strokeDasharray="4 4"
+                    />
+                ))}
+
+                {/* Area fill */}
+                <path d={areaPath} fill="url(#areaGrad)" />
+
+                {/* Line */}
+                <path d={linePath} fill="none" stroke="#0ea5e9" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+
+                {/* Dots */}
+                {combinedPoints.map((p, i) => (
+                    <circle key={i} cx={p.x} cy={p.y} r="3" fill="#0ea5e9" stroke="#020617" strokeWidth="1.5" />
+                ))}
+
+                {/* X-axis labels */}
+                {data.map((d, i) => {
+                    if (i % 2 !== 0 && data.length > 7) return null;
+                    const x = padding.left + (i / (data.length - 1 || 1)) * chartW;
+                    return (
+                        <text key={i} x={x} y={height - 5} textAnchor="middle" fill="#475569" fontSize="8" fontWeight="600">
+                            {d.dateLabel}
+                        </text>
+                    );
+                })}
+            </svg>
+        </div>
     );
 };
 
+// ── Model Usage Highlight Card ───────────────────────────────────────────────
+const ModelHighlight = ({ model, type, icon: Icon, accentColor }) => (
+    <div className="glass-card rounded-xl p-4 border border-slate-700/50 flex items-center gap-4">
+        <div className={`w-10 h-10 rounded-xl ${accentColor} flex items-center justify-center`}>
+            <Icon className="w-5 h-5" />
+        </div>
+        <div className="flex-1 min-w-0">
+            <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">{type}</p>
+            <p className="text-sm text-white font-bold truncate">{model?.label || "—"}</p>
+        </div>
+        <span className="text-xl font-black text-white">{model?.value ?? "—"}</span>
+    </div>
+);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MAIN COMPONENT
+// ═══════════════════════════════════════════════════════════════════════════════
+
 const AdminDashboard = ({ user }) => {
     const [stats, setStats] = useState(null);
-    const [allUsers, setAllUsers] = useState([]);
-    const [allReports, setAllReports] = useState([]);
+    const [modelUsage, setModelUsage] = useState(null);
+    const [timeline, setTimeline] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
 
@@ -155,14 +229,14 @@ const AdminDashboard = ({ user }) => {
         if (isRefresh) setRefreshing(true);
         else setLoading(true);
         try {
-            const [statsData, usersData, reportsData] = await Promise.all([
+            const [statsData, modelData, timelineData] = await Promise.all([
                 getSystemStats(),
-                getAllUsers(),
-                getAllReportsAdmin(),
+                getModelUsageAnalytics(),
+                getActivityTimeline(30),
             ]);
             setStats(statsData);
-            setAllUsers(usersData);
-            setAllReports(reportsData);
+            setModelUsage(modelData);
+            setTimeline(timelineData);
         } catch (error) {
             console.error("Failed to fetch dashboard data:", error);
         } finally {
@@ -173,27 +247,9 @@ const AdminDashboard = ({ user }) => {
 
     useEffect(() => { fetchAll(); }, []);
 
-    // Derived chart data
-    const roleData = useMemo(() => [
-        { label: "Users", value: allUsers.filter((u) => !u.role || u.role === "user").length },
-        { label: "Admins", value: allUsers.filter((u) => u.role === "admin").length },
-        { label: "Super", value: allUsers.filter((u) => u.role === "super_admin").length },
-    ], [allUsers]);
-
-    const reportTypeData = useMemo(() => {
-        const types = {};
-        allReports.forEach((r) => { types[r.reportType || "Other"] = (types[r.reportType || "Other"] || 0) + 1; });
-        return Object.entries(types).map(([label, value]) => ({ label, value }));
-    }, [allReports]);
-
-    const recentUsers = useMemo(() => allUsers.slice(0, 5), [allUsers]);
-    const recentReports = useMemo(() => allReports.slice(0, 5), [allReports]);
-
-    const formatDate = (ts) => {
-        if (!ts) return "—";
-        const d = typeof ts === "number" ? new Date(ts) : ts.toDate ? ts.toDate() : new Date(ts.seconds ? ts.seconds * 1000 : ts);
-        return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
-    };
+    // Chart color palettes
+    const pieColors = ["#0ea5e9", "#a855f7", "#f59e0b", "#10b981", "#ef4444", "#6366f1"];
+    const barColors = ["bg-neonCyan/80", "bg-violet-400/80", "bg-amber-400/80", "bg-neonGreen/80", "bg-rose-400/80", "bg-blue-400/80"];
 
     return (
         <AdminLayout user={user}>
@@ -205,7 +261,7 @@ const AdminDashboard = ({ user }) => {
                         System Overview
                     </h1>
                     <p className="text-sm text-slate-500 mt-1">
-                        Real-time platform metrics, charts, and usage statistics.
+                        Real-time platform metrics, advanced analytics, and usage statistics.
                     </p>
                 </div>
                 <button
@@ -239,122 +295,110 @@ const AdminDashboard = ({ user }) => {
                         <StatCard title="Activity Logs" value={stats?.logsCount} icon={ScrollText} accent="bg-blue-500/10" subtitle="Tracked events" />
                     </div>
 
-                    {/* Charts Row */}
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-                        {/* Registration Trend */}
+                    {/* ── Charts Row 1 ───────────────────────────────────────── */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                        {/* Line Chart — Activity Over Time */}
                         <div className="glass-card rounded-2xl p-6 border border-slate-700/50">
-                            <div className="flex items-center gap-2 mb-6">
-                                <BarChart3 className="w-4 h-4 text-neonCyan" />
-                                <h3 className="text-sm font-bold text-white uppercase tracking-widest">
-                                    Registrations (7d)
-                                </h3>
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="flex items-center gap-2">
+                                    <LineChart className="w-4 h-4 text-neonCyan" />
+                                    <h3 className="text-sm font-bold text-white uppercase tracking-widest">
+                                        Activity Trend (14d)
+                                    </h3>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <span className="flex items-center gap-1 text-[9px] text-slate-400"><span className="w-2 h-2 rounded-full bg-neonCyan inline-block" /> Combined</span>
+                                </div>
                             </div>
-                            <RegistrationTrend users={allUsers} />
+                            <ActivityLineChart timeline={timeline} />
                         </div>
 
-                        {/* User Roles Donut */}
+                        {/* Pie Chart — Model Usage Distribution */}
                         <div className="glass-card rounded-2xl p-6 border border-slate-700/50">
                             <div className="flex items-center gap-2 mb-6">
-                                <PieChart className="w-4 h-4 text-neonPurple" />
+                                <PieChart className="w-4 h-4 text-violet-400" />
                                 <h3 className="text-sm font-bold text-white uppercase tracking-widest">
-                                    User Roles
+                                    Model Usage Distribution
                                 </h3>
                             </div>
-                            <DonutChart
-                                data={roleData}
-                                colors={["#0ea5e9", "#a855f7", "#f59e0b"]}
-                            />
-                        </div>
-
-                        {/* Report Types Bar */}
-                        <div className="glass-card rounded-2xl p-6 border border-slate-700/50">
-                            <div className="flex items-center gap-2 mb-6">
-                                <BarChart3 className="w-4 h-4 text-rose-400" />
-                                <h3 className="text-sm font-bold text-white uppercase tracking-widest">
-                                    Report Types
-                                </h3>
-                            </div>
-                            {reportTypeData.length > 0 ? (
-                                <MiniBarChart
-                                    data={reportTypeData}
-                                    colors={["bg-rose-400/80", "bg-blue-400/80", "bg-neonPurple/80", "bg-slate-500/80"]}
+                            {modelUsage?.distribution?.length > 0 ? (
+                                <DonutChart
+                                    data={modelUsage.distribution}
+                                    colors={pieColors}
                                 />
                             ) : (
-                                <div className="h-32 flex items-center justify-center text-xs text-slate-600">No reports yet</div>
+                                <div className="h-32 flex items-center justify-center text-xs text-slate-600">No prediction data yet</div>
                             )}
                         </div>
                     </div>
 
-                    {/* Recent Activity Row */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-                        {/* Recent Users */}
-                        <div className="glass-card rounded-2xl p-6 border border-slate-700/50">
-                            <div className="flex items-center justify-between mb-4">
-                                <div className="flex items-center gap-2">
-                                    <Clock className="w-4 h-4 text-neonCyan" />
-                                    <h3 className="text-sm font-bold text-white uppercase tracking-widest">Recent Users</h3>
-                                </div>
-                                <Link to="/admin/users" className="flex items-center gap-1 text-xs text-neonCyan hover:text-white transition-colors">
-                                    View All <ArrowUpRight className="w-3 h-3" />
-                                </Link>
+                    {/* ── Charts Row 2 ───────────────────────────────────────── */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                        {/* Bar Chart — Model Frequency */}
+                        <div className="lg:col-span-2 glass-card rounded-2xl p-6 border border-slate-700/50">
+                            <div className="flex items-center gap-2 mb-6">
+                                <BarChart3 className="w-4 h-4 text-amber-400" />
+                                <h3 className="text-sm font-bold text-white uppercase tracking-widest">
+                                    Model Usage Count
+                                </h3>
                             </div>
-                            {recentUsers.length === 0 ? (
-                                <p className="text-xs text-slate-600 text-center py-8">No users found.</p>
+                            {modelUsage?.distribution?.length > 0 ? (
+                                <MiniBarChart
+                                    data={modelUsage.distribution}
+                                    colors={barColors}
+                                />
                             ) : (
-                                <div className="space-y-2">
-                                    {recentUsers.map((u) => (
-                                        <div key={u.uid} className="flex items-center gap-3 bg-slate-900/50 rounded-xl p-3 border border-slate-800/50">
-                                            <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-xs font-bold text-slate-300 flex-shrink-0">
-                                                {u.fullName?.charAt(0) || "?"}
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="text-xs text-white font-medium truncate">{u.fullName || "—"}</p>
-                                                <p className="text-[10px] text-slate-500 font-mono truncate">{u.email}</p>
-                                            </div>
-                                            <span className="text-[10px] text-slate-500 font-mono flex-shrink-0">{formatDate(u.createdAt)}</span>
-                                        </div>
-                                    ))}
-                                </div>
+                                <div className="h-36 flex items-center justify-center text-xs text-slate-600">No prediction data yet</div>
                             )}
                         </div>
 
-                        {/* Recent Reports */}
-                        <div className="glass-card rounded-2xl p-6 border border-slate-700/50">
-                            <div className="flex items-center justify-between mb-4">
-                                <div className="flex items-center gap-2">
-                                    <Clock className="w-4 h-4 text-neonPurple" />
-                                    <h3 className="text-sm font-bold text-white uppercase tracking-widest">Recent Reports</h3>
+                        {/* Most / Least Used Model */}
+                        <div className="flex flex-col gap-4">
+                            <ModelHighlight
+                                model={modelUsage?.mostUsed}
+                                type="Most Used Model"
+                                icon={ArrowUpRight}
+                                accentColor="bg-neonGreen/20 text-neonGreen"
+                            />
+                            <ModelHighlight
+                                model={modelUsage?.leastUsed}
+                                type="Least Used Model"
+                                icon={ArrowDownRight}
+                                accentColor="bg-amber-500/20 text-amber-400"
+                            />
+                            <div className="glass-card rounded-xl p-4 border border-slate-700/50 flex items-center gap-4">
+                                <div className="w-10 h-10 rounded-xl bg-violet-500/20 text-violet-400 flex items-center justify-center">
+                                    <Target className="w-5 h-5" />
                                 </div>
-                                <Link to="/admin/reports" className="flex items-center gap-1 text-xs text-neonPurple hover:text-white transition-colors">
-                                    View All <ArrowUpRight className="w-3 h-3" />
-                                </Link>
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Total Predictions</p>
+                                    <p className="text-sm text-white font-bold">{modelUsage?.total ?? 0} analyses</p>
+                                </div>
                             </div>
-                            {recentReports.length === 0 ? (
-                                <p className="text-xs text-slate-600 text-center py-8">No reports found.</p>
-                            ) : (
-                                <div className="space-y-2">
-                                    {recentReports.map((r) => (
-                                        <div key={r.id} className="flex items-center gap-3 bg-slate-900/50 rounded-xl p-3 border border-slate-800/50">
-                                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                                                r.reportType === "Heart" ? "bg-rose-500/20 text-rose-400" :
-                                                r.reportType === "Diabetes" ? "bg-blue-500/20 text-blue-400" :
-                                                r.reportType === "Cancer" ? "bg-neonPurple/20 text-neonPurple" :
-                                                "bg-slate-700/50 text-slate-300"
-                                            }`}>
-                                                <FileText className="w-4 h-4" />
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="text-xs text-white font-medium truncate">{r.reportTitle || "—"}</p>
-                                                <p className="text-[10px] text-slate-500 truncate">{r.userName || r.userEmail || "—"}</p>
-                                            </div>
-                                            <div className="text-right flex-shrink-0">
-                                                <span className="text-[10px] text-slate-500 font-mono">{formatDate(r.createdAt)}</span>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
                         </div>
+                    </div>
+
+                    {/* ── Quick Navigation ──────────────────────────────────── */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                        {[
+                            { label: "Users", desc: "Anonymized overview", path: "/admin/users", icon: Users, color: "text-neonCyan" },
+                            { label: "Reports", desc: "Blockchain metadata", path: "/admin/reports", icon: FileText, color: "text-neonPurple" },
+                            { label: "Security Logs", desc: "SOC monitoring", path: "/admin/logs", icon: Shield, color: "text-amber-400" },
+                            { label: "My Profile", desc: "Account settings", path: "/admin/profile", icon: Zap, color: "text-neonGreen" },
+                        ].map((nav) => (
+                            <Link
+                                key={nav.path}
+                                to={nav.path}
+                                className="glass-card rounded-2xl p-5 border border-slate-700/50 group hover:border-slate-600 transition-all duration-300"
+                            >
+                                <div className="flex items-center justify-between mb-3">
+                                    <nav.icon className={`w-5 h-5 ${nav.color}`} />
+                                    <ArrowUpRight className="w-4 h-4 text-slate-600 group-hover:text-white transition-colors" />
+                                </div>
+                                <p className="text-sm font-bold text-white">{nav.label}</p>
+                                <p className="text-[10px] text-slate-500 mt-0.5">{nav.desc}</p>
+                            </Link>
+                        ))}
                     </div>
 
                     {/* System Info Card */}

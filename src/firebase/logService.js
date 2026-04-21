@@ -27,6 +27,20 @@ export const LOG_ACTIONS = {
     ADMIN_DEACTIVATED: "admin_deactivated",
     ROLE_CHANGED: "role_changed",
     PROFILE_UPDATED: "profile_updated",
+    // ── Security Events (SOC Dashboard) ─────────────────────────────────────
+    LOGIN_FAILED: "login_failed",
+    ACCOUNT_LOCKED: "account_locked",
+    OTP_REQUESTED: "otp_requested",
+    PASSWORD_RESET: "password_reset",
+    ADMIN_LOGIN: "admin_login",
+    ADMIN_ACTION: "admin_action",
+};
+
+// ─── Severity Levels ─────────────────────────────────────────────────────────
+export const LOG_SEVERITY = {
+    INFO: "info",
+    WARNING: "warning",
+    CRITICAL: "critical",
 };
 
 /**
@@ -38,8 +52,9 @@ export const LOG_ACTIONS = {
  * @param {string}  params.email    - Email of the acting user
  * @param {string}  params.action   - One of LOG_ACTIONS
  * @param {object}  [params.metadata] - Additional context (e.g. target UID)
+ * @param {string}  [params.severity] - One of LOG_SEVERITY (default: info)
  */
-export async function logActivity({ userId, email, action, metadata = {} }) {
+export async function logActivity({ userId, email, action, metadata = {}, severity = LOG_SEVERITY.INFO }) {
     try {
         await Promise.race([
             addDoc(collection(db, "activityLogs"), {
@@ -47,6 +62,7 @@ export async function logActivity({ userId, email, action, metadata = {} }) {
                 email: email || "",
                 action,
                 metadata,
+                severity,
                 timestamp: serverTimestamp(),
             }),
             new Promise((_, reject) =>
@@ -57,6 +73,18 @@ export async function logActivity({ userId, email, action, metadata = {} }) {
         // eslint-disable-next-line no-console
         console.warn("[LogService] Failed to log activity:", error.message);
     }
+}
+
+/**
+ * Log a security event (convenience wrapper with severity).
+ */
+export async function logSecurityEvent({ userId, email, action, metadata = {} }) {
+    const severity =
+        action === LOG_ACTIONS.ACCOUNT_LOCKED ? LOG_SEVERITY.CRITICAL :
+        action === LOG_ACTIONS.LOGIN_FAILED ? LOG_SEVERITY.WARNING :
+        LOG_SEVERITY.INFO;
+
+    return logActivity({ userId, email, action, metadata, severity });
 }
 
 /**
@@ -97,6 +125,46 @@ export async function getActivityLogs(filters = {}) {
     } catch (error) {
         // eslint-disable-next-line no-console
         console.error("[LogService] Failed to fetch logs:", error);
+        return [];
+    }
+}
+
+/**
+ * Fetch security-specific logs for the SOC dashboard.
+ * Returns only security-related events.
+ */
+export async function getSecurityLogs(limitCount = 300) {
+    try {
+        const q = query(
+            collection(db, "activityLogs"),
+            orderBy("timestamp", "desc"),
+            limit(limitCount)
+        );
+        const snapshot = await Promise.race([
+            getDocs(q),
+            new Promise((_, reject) =>
+                setTimeout(() => reject(new Error("Timeout")), 8000)
+            ),
+        ]);
+
+        const securityActions = new Set([
+            LOG_ACTIONS.USER_LOGIN,
+            LOG_ACTIONS.LOGIN_FAILED,
+            LOG_ACTIONS.ACCOUNT_LOCKED,
+            LOG_ACTIONS.OTP_REQUESTED,
+            LOG_ACTIONS.PASSWORD_RESET,
+            LOG_ACTIONS.ADMIN_LOGIN,
+            LOG_ACTIONS.ADMIN_CREATED,
+            LOG_ACTIONS.ADMIN_ACTIVATED,
+            LOG_ACTIONS.ADMIN_DEACTIVATED,
+            LOG_ACTIONS.ADMIN_ACTION,
+        ]);
+
+        return snapshot.docs
+            .map((doc) => ({ id: doc.id, ...doc.data() }))
+            .filter((log) => securityActions.has(log.action));
+    } catch (error) {
+        console.error("[LogService] Failed to fetch security logs:", error);
         return [];
     }
 }

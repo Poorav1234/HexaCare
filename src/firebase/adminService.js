@@ -429,6 +429,191 @@ export async function getSystemStats() {
     return stats;
 }
 
+// ─── Analytics Aggregation (Admin Charts) ────────────────────────────────
+
+/**
+ * Get aggregated model/prediction type usage distribution.
+ * Returns only type counts — no user-specific data.
+ */
+export async function getModelUsageAnalytics() {
+    try {
+        const snapshot = await getDocs(collection(db, "predictions"));
+        const typeCounts = {};
+        snapshot.docs.forEach((d) => {
+            const type = d.data().type || "Unknown";
+            typeCounts[type] = (typeCounts[type] || 0) + 1;
+        });
+
+        const entries = Object.entries(typeCounts)
+            .map(([label, value]) => ({ label, value }))
+            .sort((a, b) => b.value - a.value);
+
+        const mostUsed = entries.length > 0 ? entries[0] : null;
+        const leastUsed = entries.length > 0 ? entries[entries.length - 1] : null;
+
+        return { distribution: entries, mostUsed, leastUsed, total: snapshot.size };
+    } catch (error) {
+        console.error("[Admin] Failed to get model usage:", error);
+        return { distribution: [], mostUsed: null, leastUsed: null, total: 0 };
+    }
+}
+
+/**
+ * Get system activity over time (last N days).
+ * Aggregates daily counts of logins, report submissions, and predictions.
+ * Returns only counts per day — no user identifiers.
+ */
+export async function getActivityTimeline(days = 30) {
+    try {
+        const logsSnapshot = await getDocs(collection(db, "activityLogs"));
+        const now = Date.now();
+        const cutoff = now - days * 24 * 60 * 60 * 1000;
+
+        const timeline = [];
+        for (let i = days - 1; i >= 0; i--) {
+            const d = new Date();
+            d.setDate(d.getDate() - i);
+            d.setHours(0, 0, 0, 0);
+            timeline.push({
+                date: d.toISOString().slice(0, 10),
+                dateLabel: d.toLocaleDateString("en-IN", { day: "2-digit", month: "short" }),
+                logins: 0,
+                reports: 0,
+                predictions: 0,
+                failures: 0,
+            });
+        }
+
+        const dateMap = {};
+        timeline.forEach((t, i) => (dateMap[t.date] = i));
+
+        logsSnapshot.docs.forEach((doc) => {
+            const data = doc.data();
+            const ts = data.timestamp?.toDate
+                ? data.timestamp.toDate().getTime()
+                : data.timestamp?.seconds
+                ? data.timestamp.seconds * 1000
+                : 0;
+
+            if (ts < cutoff) return;
+
+            const dateStr = new Date(ts).toISOString().slice(0, 10);
+            const idx = dateMap[dateStr];
+            if (idx === undefined) return;
+
+            switch (data.action) {
+                case "user_login":
+                case "admin_login":
+                    timeline[idx].logins++;
+                    break;
+                case "report_submitted":
+                    timeline[idx].reports++;
+                    break;
+                case "prediction_run":
+                    timeline[idx].predictions++;
+                    break;
+                case "login_failed":
+                    timeline[idx].failures++;
+                    break;
+            }
+        });
+
+        return timeline;
+    } catch (error) {
+        console.error("[Admin] Failed to get activity timeline:", error);
+        return [];
+    }
+}
+
+/**
+ * Get anonymized user statistics for the admin users page.
+ * Returns only aggregated data — no personal information.
+ */
+export async function getAnonymizedUserStats() {
+    try {
+        const usersSnap = await get(ref(rtdb, "users"));
+        if (!usersSnap.exists()) {
+            return {
+                total: 0, active: 0, inactive: 0, admins: 0,
+                regularUsers: 0, recentRegistrations: 0,
+                registrationsByMonth: [], roleDistribution: [],
+            };
+        }
+
+        const users = Object.entries(usersSnap.val());
+        const now = Date.now();
+        const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
+
+        const active = users.filter(([, u]) => u.isActive !== false).length;
+        const inactive = users.length - active;
+        const admins = users.filter(([, u]) => u.role === "admin" || u.role === "super_admin").length;
+        const regularUsers = users.length - admins;
+        const recentRegistrations = users.filter(([, u]) => (u.createdAt || 0) > thirtyDaysAgo).length;
+
+        const registrationsByMonth = [];
+        for (let i = 5; i >= 0; i--) {
+            const d = new Date();
+            d.setMonth(d.getMonth() - i);
+            const monthStart = new Date(d.getFullYear(), d.getMonth(), 1).getTime();
+            const monthEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59).getTime();
+            const count = users.filter(([, u]) => {
+                const ct = u.createdAt || 0;
+                return ct >= monthStart && ct <= monthEnd;
+            }).length;
+            registrationsByMonth.push({
+                label: d.toLocaleDateString("en-IN", { month: "short", year: "2-digit" }),
+                value: count,
+            });
+        }
+
+        return {
+            total: users.length, active, inactive, admins, regularUsers,
+            recentRegistrations, registrationsByMonth,
+            roleDistribution: [
+                { label: "Users", value: regularUsers },
+                { label: "Admins", value: admins },
+            ],
+        };
+    } catch (error) {
+        console.error("[Admin] Failed to get anonymized user stats:", error);
+        return {
+            total: 0, active: 0, inactive: 0, admins: 0,
+            regularUsers: 0, recentRegistrations: 0,
+            registrationsByMonth: [], roleDistribution: [],
+        };
+    }
+}
+
+/**
+ * Get report metadata only — no content or user linkage.
+ * Returns report ID, timestamp, type/status only.
+ */
+export async function getReportMetadataOnly() {
+    try {
+        const snapshot = await getDocs(collection(db, "reports"));
+        return snapshot.docs
+            .map((d) => {
+                const data = d.data();
+                return {
+                    id: d.id,
+                    reportType: data.reportType || "General",
+                    txHash: data.txHash || null,
+                    hasIPFS: !!data.fileUrl,
+                    createdAt: data.createdAt,
+                    status: data.txHash ? "On-Chain" : "Pending",
+                };
+            })
+            .sort((a, b) => {
+                const aTime = a.createdAt?.seconds || 0;
+                const bTime = b.createdAt?.seconds || 0;
+                return bTime - aTime;
+            });
+    } catch (error) {
+        console.error("[Admin] Failed to fetch report metadata:", error);
+        return [];
+    }
+}
+
 /**
  * Safely count documents in a Firestore collection.
  * Falls back to getDocs().size if getCountFromServer is unavailable.
@@ -448,3 +633,4 @@ async function safeCount(collectionName) {
         }
     }
 }
+
