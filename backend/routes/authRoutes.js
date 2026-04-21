@@ -102,7 +102,7 @@ router.post("/login/request-otp", async (req, res) => {
 
         // Rate-limit successful OTP dispatches (isolated only for ACTUAL OTP requests)
         if (!checkOtpRateLimit(`login:${email}`, 3)) {
-            return res.status(429).json({ error: "Too many OTP requests. Please wait a moment." });
+            return res.status(429).json({ error: "Too many login attempts. Please wait a moment." });
         }
 
         // Credentials valid → generate and send OTP
