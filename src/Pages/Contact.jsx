@@ -80,7 +80,7 @@ const Contact = ({ user, profileData }) => {
                             </div>
                         </div>
 
-                        {/* Contact Form */}
+                        {/* Contact Form fix this page */}
                         <div className="lg:col-span-2">
                             {sent ? (
                                 <div className="glass-card p-10 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 text-center h-full flex flex-col items-center justify-center gap-4">
