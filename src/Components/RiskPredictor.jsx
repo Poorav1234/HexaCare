@@ -1,15 +1,22 @@
 import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
-import { Activity, Beaker, CheckCircle, ChevronLeft, Loader2, AlertTriangle, Info } from "lucide-react";
+import { Link, useLocation } from "react-router-dom";
+import { Activity, Beaker, CheckCircle, ChevronLeft, Loader2, AlertTriangle, Info, Zap } from "lucide-react";
 import NavBar from "./NavBar";
 import { savePrediction } from "../firebase/firestoreService";
 import { getUserProfile } from "../firebase/dbService";
 
 const RiskPredictor = ({ title, type, user, inputsConfig }) => {
+    const location = useLocation();
+    const initialData = location.state?.extractedFields || {};
+    const autoPredict = location.state?.autoPredict || false;
+    
     const [profileData, setProfileData] = useState(null);
-    const [formData, setFormData] = useState({});
+    const [formData, setFormData] = useState(initialData);
     const [loading, setLoading] = useState(false);
     const [result, setResult] = useState(null);
+    const [autoPredictTriggered, setAutoPredictTriggered] = useState(false);
+
+    const isAutoFilled = (name) => initialData.hasOwnProperty(name);
 
     useEffect(() => {
         const fetchProfileData = async () => {
@@ -61,8 +68,7 @@ const RiskPredictor = ({ title, type, user, inputsConfig }) => {
         return { score, riskLevel };
     };
 
-    const handlePredict = async (e) => {
-        e.preventDefault();
+    const executePrediction = async (dataPayload) => {
         setLoading(true);
 
         try {
@@ -71,7 +77,7 @@ const RiskPredictor = ({ title, type, user, inputsConfig }) => {
             let predictionProbability = null;
 
             // Format payload generically for the backend API
-            const payload = { ...formData };
+            const payload = { ...dataPayload };
 
             // Attempt to hit our scalable background ML endpoint natively resolving the route parameter
             const response = await fetch(`http://localhost:8000/predict/${type}`, {
@@ -88,24 +94,36 @@ const RiskPredictor = ({ title, type, user, inputsConfig }) => {
             } else {
                 // If it fails (e.g. 404 because the model folder doesn't exist yet), fallback dynamically
                 console.warn(`[ML Node] Native Model for '${type}' not attached. Resolving deterministic offline function...`);
-                const evalResult = evaluateRisk(formData);
+                const evalResult = evaluateRisk(dataPayload);
                 score = evalResult.score;
                 riskLevel = evalResult.riskLevel;
             }
 
             try {
-                await savePrediction(user, type, formData, riskLevel, score);
+                await savePrediction(user, type, dataPayload, riskLevel, score);
             } catch (saveErr) {
                 console.error("Failed to save prediction, but continuing with display", saveErr);
             }
             
-            setResult({ riskLevel, score, predictionProbability, inputs: formData });
+            setResult({ riskLevel, score, predictionProbability, inputs: dataPayload });
         } catch (err) {
             console.error("Failed to execute prediction", err);
             alert("Error in prediction: " + err.message);
         } finally {
             setLoading(false);
         }
+    };
+
+    useEffect(() => {
+        if (autoPredict && !autoPredictTriggered && Object.keys(formData).length > 0) {
+            setAutoPredictTriggered(true);
+            executePrediction(formData);
+        }
+    }, [autoPredict, formData, autoPredictTriggered]);
+
+    const handlePredict = (e) => {
+        if (e) e.preventDefault();
+        executePrediction(formData);
     };
 
     return (
@@ -148,9 +166,16 @@ const RiskPredictor = ({ title, type, user, inputsConfig }) => {
 
                                         return (
                                             <div key={input.name}>
-                                                <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">
-                                                    {input.label}
-                                                    {input.optional && <span className="text-slate-500 text-xs ml-2">(optional)</span>}
+                                                <label className="flex items-center justify-between text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">
+                                                    <span>
+                                                        {input.label}
+                                                        {input.optional && <span className="text-slate-500 text-xs ml-2">(optional)</span>}
+                                                    </span>
+                                                    {isAutoFilled(input.name) && (
+                                                        <span className="flex items-center gap-1 text-[10px] text-neonCyan bg-neonCyan/10 px-2 py-0.5 rounded border border-neonCyan/20">
+                                                            <Zap className="w-3 h-3" /> Auto-filled
+                                                        </span>
+                                                    )}
                                                 </label>
                                                 {input.help && (
                                                     <p className="text-xs text-slate-500 mb-2 italic">{input.help}</p>
@@ -160,6 +185,7 @@ const RiskPredictor = ({ title, type, user, inputsConfig }) => {
                                                     <input
                                                         type="checkbox"
                                                         name={input.name}
+                                                        checked={!!formData[input.name]}
                                                         onChange={handleChange}
                                                         className="w-4 h-4 rounded bg-slate-800 border-slate-700 text-neonPurple focus:ring-neonPurple/50"
                                                     />
@@ -169,9 +195,9 @@ const RiskPredictor = ({ title, type, user, inputsConfig }) => {
                                                 <select
                                                     name={input.name}
                                                     required
-                                                    defaultValue=""
+                                                    value={formData[input.name] !== undefined ? formData[input.name] : ""}
                                                     onChange={handleChange}
-                                                    className="w-full bg-slate-900 border border-slate-700/80 text-white rounded-xl px-4 py-3 text-sm focus:border-neonPurple focus:ring-1 focus:ring-neonPurple outline-none transition-all"
+                                                    className={`w-full bg-slate-900 border ${isAutoFilled(input.name) ? 'border-neonCyan/50' : 'border-slate-700/80'} text-white rounded-xl px-4 py-3 text-sm focus:border-neonPurple focus:ring-1 focus:ring-neonPurple outline-none transition-all`}
                                                 >
                                                     <option value="" disabled>Select {input.label}</option>
                                                     {input.options.map(opt => (
@@ -186,9 +212,10 @@ const RiskPredictor = ({ title, type, user, inputsConfig }) => {
                                                     min={input.min}
                                                     max={input.max}
                                                     step={input.step}
+                                                    value={formData[input.name] !== undefined ? formData[input.name] : ""}
                                                     onChange={handleChange}
                                                     placeholder={input.placeholder}
-                                                    className="w-full bg-slate-900 border border-slate-700/80 text-white rounded-xl px-4 py-3 text-sm focus:border-neonPurple focus:ring-1 focus:ring-neonPurple outline-none transition-all placeholder-slate-600"
+                                                    className={`w-full bg-slate-900 border ${isAutoFilled(input.name) ? 'border-neonCyan/50 shadow-[0_0_10px_rgba(34,211,238,0.1)]' : 'border-slate-700/80'} text-white rounded-xl px-4 py-3 text-sm focus:border-neonPurple focus:ring-1 focus:ring-neonPurple outline-none transition-all placeholder-slate-600`}
                                                 />
                                             )}
                                             </div>
@@ -263,7 +290,7 @@ const RiskPredictor = ({ title, type, user, inputsConfig }) => {
                                 </div>
 
                                 <button
-                                    onClick={() => { setResult(null); setFormData({}); }}
+                                    onClick={() => { setResult(null); setFormData(initialData); setAutoPredictTriggered(false); }}
                                     className="text-sm font-medium text-neonPurple hover:text-white transition-colors uppercase tracking-widest border-b border-neonPurple/50 hover:border-white pb-1"
                                 >
                                     Initialize New Run

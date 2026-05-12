@@ -90,28 +90,10 @@ const Dashboard = ({ user }) => {
             path: "/reports",
         },
         {
-            title: "Heart Risk Inference",
-            description: "Evaluate heart health risks using daily metrics.",
-            icon: HeartPulse,
-            path: "/predict/heart",
-        },
-        {
-            title: "Diabetes Risk Inference",
-            description: "Analyze glucose and BMI for metabolic insights.",
-            icon: Droplet,
-            path: "/predict/diabetes",
-        },
-        {
-            title: "Lung Cancer Risk Inference",
-            description: "Assess lung cancer risk using lifestyle and symptom factors.",
-            icon: Activity,
-            path: "/predict/lung",
-        },
-        {
-            title: "Overall Health Inference",
-            description: "Comprehensive evaluation of your overall health.",
+            title: "Smart Report Analyzer",
+            description: "Upload a medical report and let AI automatically assess health risks (Heart, Diabetes, Lung).",
             icon: ShieldAlert,
-            path: "/predict/overall",
+            path: "/predict",
         },
     ];
 

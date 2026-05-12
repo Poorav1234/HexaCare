@@ -1,10 +1,12 @@
-from fastapi import FastAPI, HTTPException, Path
+from fastapi import FastAPI, HTTPException, Path, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Dict, Any
+from typing import Dict, Any, List
+from report_parser import extract_text_from_file, parse_report_and_route
 import joblib
 import pandas as pd
 import os
+import re
 
 app = FastAPI(title="Disease Risk Prediction API")
 
@@ -135,6 +137,70 @@ def predict_risk(disease_type: str, data: Dict[str, Any]):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Prediction error: {str(e)}")
+
+REQUIRED_FEATURES = {
+    "heart": ["age", "sex", "cp", "trestbps", "restecg", "thalach", "exang", "oldpeak", "slope", "ca", "thal"],
+    "diabetes": ["age", "gender", "hypertension", "heart_disease", "bmi", "HbA1c_level", "blood_glucose_level", "smoking_history"],
+    "lung": ["GENDER", "AGE", "SMOKING", "YELLOW_FINGERS", "ANXIETY", "PEER_PRESSURE", "CHRONIC DISEASE", "FATIGUE ", "ALLERGY ", "WHEEZING", "ALCOHOL CONSUMING", "COUGHING", "SHORTNESS OF BREATH", "SWALLOWING DIFFICULTY", "CHEST PAIN"]
+}
+
+@app.post("/upload_report")
+async def upload_report(file: UploadFile = File(...)):
+    try:
+        contents = await file.read()
+        text = extract_text_from_file(contents, file.filename)
+        
+        if not text or len(text.strip()) < 10:
+            return {
+                "success": False,
+                "message": "This report does not contain sufficient or relevant data for disease prediction.",
+                "text_extracted": text
+            }
+            
+        scores, extracted_data = parse_report_and_route(text)
+        
+        best_disease = None
+        best_score = 0
+        for d, s in scores.items():
+            if s > best_score:
+                best_score = s
+                best_disease = d
+        
+        if best_score < 1:
+            return {
+                "success": False,
+                "message": "This report does not contain sufficient or relevant data for disease prediction.",
+                "scores": scores,
+                "extracted_data": extracted_data
+            }
+            
+        required_fields = REQUIRED_FEATURES.get(best_disease, [])
+        missing_fields = []
+        
+        for field in required_fields:
+            # We can do a case-insensitive check or check if key exists
+            if field not in extracted_data:
+                missing_fields.append(field)
+                
+        ready = len(missing_fields) == 0
+        
+        confidence = round(min(best_score / len(required_fields) * 2, 0.99), 2) if required_fields else 0.9
+        
+        # If ready, we could optionally run prediction here, but to keep the flow consistent, 
+        # we'll just return the required structure so frontend handles it uniformly.
+        
+        return {
+            "success": True,
+            "detectedDisease": best_disease,
+            "confidence": confidence,
+            "extractedFields": extracted_data,
+            "missingFields": missing_fields,
+            "readyForPrediction": ready,
+            "message": "Report analyzed successfully."
+        }
+        
+    except Exception as e:
+        return {"success": False, "message": str(e)}
 
 if __name__ == "__main__":
     import uvicorn

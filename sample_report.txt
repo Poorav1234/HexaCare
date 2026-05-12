@@ -1,0 +1,14 @@
+Patient Name: John Doe
+Age: 55
+Gender: Male
+
+--- LABORATORY REPORT ---
+Glucose: 155
+HbA1c: 7.2
+BMI: 28.5
+
+Cholesterol: 240
+Blood Pressure: 145/90
+Heart Rate: 88
+
+Patient has a history of smoking (former smoker) and occasional coughing. No major chest pain reported.
