@@ -17,7 +17,14 @@ const {
     generateResetToken,
     verifyResetToken,
 } = require("../services/securityService");
-const { sendOtpEmail, sendLockNotification } = require("../services/emailService");
+const { sendOtpEmail, sendLockNotification, sendDeviceApprovalEmail } = require("../services/emailService");
+const {
+    checkDeviceTrust,
+    createPendingApproval,
+    createSession,
+    logDeviceSecurityEvent,
+    getUidFromEmail,
+} = require("../services/deviceService");
 
 const FIREBASE_API_KEY = process.env.FIREBASE_API_KEY;
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:5000";
@@ -55,11 +62,7 @@ function checkOtpRateLimit(key, maxPerMinute = 3) {
 }
 
 function getClientIp(req) {
-    return (
-        req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
-        req.socket?.remoteAddress ||
-        "unknown"
-    );
+    return req.ip || "unknown";
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -157,9 +160,14 @@ router.post("/login/request-otp", async (req, res) => {
 });
 
 /**
- * Step 2 — Verify the login OTP.
+ * Step 2 — Verify the login OTP, then check device trust.
  * POST /auth/login/verify-otp
  * Body: { email, otp }
+ *
+ * Response scenarios:
+ *  - Device trusted   → { verified: true, deviceTrusted: true }
+ *  - Device unknown   → { verified: true, deviceTrusted: false, approvalId }
+ *  - Firebase Admin N/A → { verified: true, deviceTrusted: true } (fallback — skip device check)
  */
 router.post("/login/verify-otp", async (req, res) => {
     const { email, otp } = req.body;
@@ -176,7 +184,93 @@ router.post("/login/verify-otp", async (req, res) => {
     }
 
     recordSuccessfulLogin(email);
-    res.json({ success: true, message: "OTP verified. Login successful.", verified: true });
+
+    // ── Device Trust Check (additive — does NOT break existing flow) ─────
+    try {
+        if (!admin) {
+            // Firebase Admin not available — skip device check, allow login
+            return res.json({ success: true, message: "OTP verified. Login successful.", verified: true, deviceTrusted: true });
+        }
+
+        const uid = await getUidFromEmail(email);
+        if (!uid) {
+            // User not found in Firebase Auth — skip device check
+            return res.json({ success: true, message: "OTP verified. Login successful.", verified: true, deviceTrusted: true });
+        }
+
+        const deviceResult = await checkDeviceTrust(uid, req);
+
+        if (deviceResult.trusted) {
+            // Known trusted device — allow login immediately
+            await createSession(uid, req);
+            await logDeviceSecurityEvent(uid, email, "login_trusted_device", {
+                deviceId: deviceResult.deviceId,
+                browser: deviceResult.deviceInfo.browser,
+                ip: deviceResult.deviceInfo.ip,
+            });
+            return res.json({
+                success: true,
+                message: "OTP verified. Trusted device — login successful.",
+                verified: true,
+                deviceTrusted: true,
+            });
+        }
+
+        // Unknown device — create pending approval
+        const approval = await createPendingApproval(uid, email, req);
+
+        // Send device approval email
+        const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:5000";
+        const approveUrl = `${BACKEND_URL}/auth/device/approve/${approval.approveToken}`;
+        const denyUrl = `${BACKEND_URL}/auth/device/deny/${approval.denyToken}`;
+
+        try {
+            await sendDeviceApprovalEmail(email, {
+                browser: approval.deviceInfo.browser,
+                os: approval.deviceInfo.os,
+                ip: approval.deviceInfo.ip,
+                timestamp: new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
+                approveUrl,
+                denyUrl,
+            });
+        } catch (emailErr) {
+            console.error("[Auth] Failed to send device approval email:", emailErr.message);
+            // If email fails, still allow login as a fallback
+            return res.json({
+                success: true,
+                message: "OTP verified. Login successful (email notification failed).",
+                verified: true,
+                deviceTrusted: true,
+            });
+        }
+
+        await logDeviceSecurityEvent(uid, email, "device_approval_requested", {
+            browser: approval.deviceInfo.browser,
+            os: approval.deviceInfo.os,
+            ip: approval.deviceInfo.ip,
+        });
+
+        return res.json({
+            success: true,
+            message: "OTP verified. New device detected — approval required.",
+            verified: true,
+            deviceTrusted: false,
+            approvalId: approval.approvalId,
+            deviceInfo: {
+                browser: approval.deviceInfo.browser,
+                os: approval.deviceInfo.os,
+            },
+        });
+    } catch (deviceErr) {
+        // Device check failed — gracefully allow login (backward compatibility)
+        console.error("[Auth] Device trust check failed:", deviceErr.message);
+        return res.json({
+            success: true,
+            message: "OTP verified. Login successful.",
+            verified: true,
+            deviceTrusted: true,
+        });
+    }
 });
 
 // ═════════════════════════════════════════════════════════════════════════════

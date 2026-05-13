@@ -9,11 +9,29 @@ const pdfParse = require("pdf-parse");
 
 const app = express();
 app.use(cors());
+
+// Fetch Cloudflare IPv4 & IPv6 arrays seamlessly from config, enabling CI/CD agility.
+const rawProxyIps = process.env.CLOUDFLARE_IPS || "loopback,linklocal,uniquelocal";
+const trustedProxies = rawProxyIps.split(",").map(ip => ip.trim());
+
+// Enable strict trust proxy against known WAF edges to natively verify real IPs and obliterate spoofing
+app.set("trust proxy", trustedProxies);
+
 app.use(express.json());
+
+// ── Strict Security Middlewares ──────────────────────────────────────────────
+const { securityHeaders, validateAndSanitize } = require("./middlewares/securityMiddleware");
+app.use(securityHeaders);
+app.use(validateAndSanitize);
+
 const upload = multer({ dest: "uploads/" });
 
 const authRoutes = require("./routes/authRoutes");
 app.use("/auth", authRoutes);
+
+// ── Trusted Device Approval Routes ───────────────────────────────────────────
+const deviceRoutes = require("./routes/deviceRoutes");
+app.use("/auth/device", deviceRoutes);
 
 const PINATA_API_KEY = "49775d0589707bce94f1";
 const RPC_URL = "https://eth-sepolia.g.alchemy.com/v2/EfKrHvH52IvPVC3acuWFO";
@@ -504,6 +522,7 @@ if (smtpConfigured) {
         port: parseInt(process.env.SMTP_PORT || "587"),
         secure: process.env.SMTP_PORT === "465",
         auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+        tls: { rejectUnauthorized: false },
     });
 }
 
