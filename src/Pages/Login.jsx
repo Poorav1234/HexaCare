@@ -10,6 +10,7 @@ import { requestLoginOtp, verifyLoginOtp, requestAccountUnlock } from "../servic
 import AuthLayout from "../Components/AuthLayout";
 import Toast from "../Components/Toast";
 import OtpInput from "../Components/OtpInput";
+import DeviceApproval from "../Components/DeviceApproval";
 
 const Login = () => {
   const [formData, setFormData] = useState({ email: "", password: "" });
@@ -28,6 +29,11 @@ const Login = () => {
   // ── Lock State ────────────────────────────────────────────────────────────
   const [accountLocked, setAccountLocked] = useState(false);
   const [lockInfo, setLockInfo] = useState(null);
+
+  // ── Device Approval State ────────────────────────────────────────────────
+  const [deviceApprovalStep, setDeviceApprovalStep] = useState(false);
+  const [approvalId, setApprovalId] = useState("");
+  const [deviceInfo, setDeviceInfo] = useState(null);
 
   const validate = () => {
     const newErrors = {};
@@ -87,9 +93,19 @@ const Login = () => {
 
     try {
       // Step 2: Verify OTP with backend
-      await verifyLoginOtp(formData.email, otp);
+      const otpResult = await verifyLoginOtp(formData.email, otp);
 
-      // Step 3: OTP verified → do the actual Firebase sign-in
+      // Step 3: Check device trust status
+      if (otpResult.deviceTrusted === false && otpResult.approvalId) {
+        // New device detected → show device approval waiting screen
+        setApprovalId(otpResult.approvalId);
+        setDeviceInfo(otpResult.deviceInfo || null);
+        setOtpStep(false);
+        setDeviceApprovalStep(true);
+        return;
+      }
+
+      // Device is trusted (or device check was skipped) → proceed to Firebase sign-in
       const result = await loginUser(formData.email, formData.password);
       // Check role to redirect admins to admin dashboard
       const role = await getUserRole(result.user?.uid || result.uid);
@@ -103,6 +119,32 @@ const Login = () => {
     } finally {
       setOtpLoading(false);
     }
+  };
+
+  // ── Device Approval Callbacks ────────────────────────────────────────────
+  const handleDeviceApproved = async () => {
+    try {
+      const result = await loginUser(formData.email, formData.password);
+      const role = await getUserRole(result.user?.uid || result.uid);
+      navigate((role === "admin" || role === "super_admin") ? "/admin" : "/dashboard");
+    } catch (error) {
+      if (error.message === "PROFILE_INCOMPLETE") {
+        navigate("/complete-profile");
+      } else {
+        setServerError(error.message || "Login failed after device approval.");
+        setDeviceApprovalStep(false);
+      }
+    }
+  };
+
+  const handleDeviceDenied = () => {
+    setServerError("Device access was denied. If this was you, try approving from your email.");
+    setDeviceApprovalStep(false);
+  };
+
+  const handleDeviceExpired = () => {
+    setServerError("Device approval request expired. Please log in again.");
+    setDeviceApprovalStep(false);
   };
 
   const handleOtpResend = async () => {
@@ -149,6 +191,33 @@ const Login = () => {
   const handleForgotPassword = () => {
     navigate("/forgot-password", { state: { email: formData.email } });
   };
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // RENDER: DEVICE APPROVAL WAITING SCREEN
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (deviceApprovalStep) {
+    return (
+      <AuthLayout title="Device Verification" subtitle="One final security check.">
+        <Toast message={serverError} type="error" onClose={() => setServerError("")} />
+        <div className="glass-card w-full max-w-2xl mx-auto p-8 rounded-2xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/20 blur-3xl rounded-full" />
+          <div className="absolute bottom-0 left-0 w-32 h-32 bg-neonCyan/20 blur-3xl rounded-full" />
+
+          <div className="relative z-10">
+            <DeviceApproval
+              email={formData.email}
+              approvalId={approvalId}
+              deviceInfo={deviceInfo}
+              onApproved={handleDeviceApproved}
+              onDenied={handleDeviceDenied}
+              onExpired={handleDeviceExpired}
+              onBack={() => { setDeviceApprovalStep(false); setServerError(""); }}
+            />
+          </div>
+        </div>
+      </AuthLayout>
+    );
+  }
 
   // ═══════════════════════════════════════════════════════════════════════════
   // RENDER: OTP VERIFICATION SCREEN

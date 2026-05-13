@@ -55,5 +55,40 @@ service cloud.firestore {
       allow read: if isAuthenticated() && (request.auth.uid == uid || isAdmin());
       allow update, delete: if isSuperAdmin();
     }
+
+    // ── NEW: userSecurity Collection (Trusted Device System) ─────────────
+    // Completely isolated from existing collections.
+    // Users can only READ their own security data.
+    // All WRITE operations happen via Firebase Admin SDK (server-side only).
+
+    // Parent document: userSecurity/{userId}
+    match /userSecurity/{userId} {
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+      allow write: if false; // Only Admin SDK can write
+
+      // Trusted Devices: users can read their own, server writes only
+      match /trustedDevices/{deviceId} {
+        allow read: if isAuthenticated() && request.auth.uid == userId;
+        allow write: if false; // Only Admin SDK
+      }
+
+      // Pending Approvals: users can read their own, server writes only
+      match /pendingApprovals/{approvalId} {
+        allow read: if isAuthenticated() && request.auth.uid == userId;
+        allow write: if false; // Only Admin SDK
+      }
+
+      // Active Sessions: users can read their own, server writes only
+      match /activeSessions/{sessionId} {
+        allow read: if isAuthenticated() && request.auth.uid == userId;
+        allow write: if false; // Only Admin SDK
+      }
+
+      // Security Events: users can read their own, admins can read all
+      match /securityEvents/{eventId} {
+        allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+        allow write: if false; // Only Admin SDK
+      }
+    }
   }
 }

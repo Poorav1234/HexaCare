@@ -18,6 +18,7 @@ function initTransporter() {
             user: process.env.SMTP_USER,
             pass: process.env.SMTP_PASS,
         },
+        tls: { rejectUnauthorized: false },
     });
     return transporter;
 }
@@ -102,4 +103,43 @@ async function sendLockNotification(to, details = {}) {
     });
 }
 
-module.exports = { initTransporter, getTransporter, sendOtpEmail, sendLockNotification };
+module.exports = { initTransporter, getTransporter, sendOtpEmail, sendLockNotification, sendDeviceApprovalEmail };
+
+// ── New Device Approval Email ───────────────────────────────────────────────
+async function sendDeviceApprovalEmail(to, details = {}) {
+    const t = getTransporter();
+    if (!t) throw new Error("Email service not configured");
+
+    const { browser, os, ip, timestamp, approveUrl, denyUrl } = details;
+
+    await t.sendMail({
+        from: process.env.SMTP_FROM || process.env.SMTP_USER,
+        to,
+        subject: "HexaCare — New Device Login Attempt",
+        html: `
+            <div style="${wrapper}">
+                <h1 style="color:#f59e0b;margin:0 0 8px;font-size:24px;">🔐 New Device Login</h1>
+                <p style="color:#94a3b8;font-size:14px;margin:0 0 24px;">Security Alert — HexaCare</p>
+                <p>Someone is trying to log in to your account from a <strong style="color:#f59e0b;">new device</strong>.</p>
+
+                <div style="background:#1e293b;padding:16px;border-radius:12px;margin:16px 0;">
+                    <p style="margin:6px 0;font-size:14px;"><strong style="color:#64748b;">Browser:</strong> <span style="color:#e2e8f0;">${browser || "Unknown"}</span></p>
+                    <p style="margin:6px 0;font-size:14px;"><strong style="color:#64748b;">Operating System:</strong> <span style="color:#e2e8f0;">${os || "Unknown"}</span></p>
+                    <p style="margin:6px 0;font-size:14px;"><strong style="color:#64748b;">IP Address:</strong> <span style="color:#e2e8f0;">${ip || "Unknown"}</span></p>
+                    <p style="margin:6px 0;font-size:14px;"><strong style="color:#64748b;">Time:</strong> <span style="color:#e2e8f0;">${timestamp || new Date().toLocaleString()}</span></p>
+                </div>
+
+                <p style="font-size:14px;margin:16px 0;color:#cbd5e1;">Was this you? Choose an action below:</p>
+
+                <div style="text-align:center;margin:24px 0;">
+                    ${approveUrl ? `<a href="${approveUrl}" style="background:#10b981;color:white;padding:14px 36px;border-radius:10px;text-decoration:none;font-weight:bold;font-size:14px;display:inline-block;margin:6px;">✓ Approve Device</a>` : ""}
+                    ${denyUrl ? `<a href="${denyUrl}" style="background:#ef4444;color:white;padding:14px 36px;border-radius:10px;text-decoration:none;font-weight:bold;font-size:14px;display:inline-block;margin:6px;">✕ Deny Access</a>` : ""}
+                </div>
+
+                <p style="color:#f59e0b;font-size:13px;">⏱️ This link expires in <strong>10 minutes</strong>.</p>
+                <p style="color:#ef4444;font-size:12px;margin-top:8px;">⚠️ If you did not attempt to log in, click <strong>Deny Access</strong> and change your password immediately.</p>
+                ${footer}
+            </div>
+        `,
+    });
+}
